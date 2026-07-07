@@ -9,35 +9,35 @@
       title: "Through the Veil",
       tagline: "The hidden past will not stay buried.",
       desc: "In a world shaped by ancient lines of power and long-buried truths, one young man discovers he is more than he was told. His journey will uncover secrets that could change everything.",
-      themeColor: "#1c4d9c",
+      themeColor: "#1b5891",
     },
     refuge: {
       number: "2",
       title: "The Refuge",
       tagline: "Some secrets are worth fighting for.",
       desc: "Aric and his allies find shelter in a hidden stronghold, but safety comes at a cost. As old enemies close in and buried truths rise to the surface, the fight for freedom becomes more dangerous than ever.",
-      themeColor: "#691110",
+      themeColor: "#77090c",
     },
     darkness: {
       number: "3",
       title: "Out of Darkness",
       tagline: "Some secrets are meant to stay buried.",
       desc: "As the shadows of the past rise, the truth becomes more dangerous than the lies. He was never meant to lead. Now he must. The fight for freedom begins where the light ends.",
-      themeColor: "#0e0b0a",
+      themeColor: "#000000",
     },
     brotherhood: {
       number: "4",
       title: "Brotherhood",
       tagline: "Bonds forged in truth. Loyalties tested by fire.",
       desc: "In a world where ancient power stirs and empires collide, loyalty is the sharpest weapon—and brotherhood is the only thing worth fighting for.",
-      themeColor: "#16294f",
+      themeColor: "#012257",
     },
     silver: {
       number: "5",
       title: "Silver Light",
       tagline: "The light remembers. The future answers.",
       desc: "A long-hidden truth comes to light. As ancient forces awaken, hope becomes the final key to a future worth fighting for.",
-      themeColor: "#0c6dad",
+      themeColor: "#0284c0",
     },
   };
 
@@ -121,6 +121,31 @@
   });
 
   layoutCarousel();
+
+  // Load the non-active backdrop images once the page is idle,
+  // so theme switches crossfade instantly without a fetch.
+  const hydrateBackdrops = () => {
+    const narrow = window.matchMedia("(max-width: 900px)").matches;
+    document.querySelectorAll(".backdrop .bg").forEach((img) => {
+      const want = (narrow && img.dataset.srcTall) || img.dataset.src || img.getAttribute("src");
+      if (want && img.getAttribute("src") !== want) img.src = want;
+      img.removeAttribute("data-src");
+    });
+  };
+  if ("requestIdleCallback" in window) requestIdleCallback(hydrateBackdrops, { timeout: 2500 });
+  else setTimeout(hydrateBackdrops, 1200);
+
+  // Raster kick: some compositors skip rasterizing freshly loaded images
+  // inside 3D-transformed layers until something invalidates the frame.
+  const kick = () => {
+    stage.style.transform = "translateZ(0)";
+    requestAnimationFrame(() => { stage.style.transform = ""; });
+  };
+  window.addEventListener("load", () => {
+    requestAnimationFrame(kick);
+    setTimeout(kick, 600);
+    setTimeout(kick, 1800);
+  });
 
   // Newsletter — friendly inline confirmation (no backend wired up yet).
   const form = document.querySelector(".newsletter__form");

@@ -3,8 +3,9 @@
 /* Book theme tokens. Only the .themed top zone paints with these;
    everything below uses the static light palette further down. */
 body {
-  --bg: #0c6dad;
-  --bg-deep: #095c94;
+  /* base colors sampled from the backdrop artwork so they blend seamlessly */
+  --bg: #0284c0;
+  --bg-deep: #026da0;
   --gold: #f3c74f;
   --ink: #ffffff;
   --muted: #d9edfa;
@@ -13,19 +14,19 @@ body {
   --glow: color-mix(in srgb, var(--gold) 55%, transparent);
 }
 body[data-book="through"] {
-  --bg: #1c4d9c; --bg-deep: #163e80; --gold: #e9bd4d;
+  --bg: #1b5891; --bg-deep: #164a7c; --gold: #e9bd4d;
   --ink: #f4f1e6; --muted: #cdd9f0;
 }
 body[data-book="refuge"] {
-  --bg: #691110; --bg-deep: #540d0c; --gold: #eec257;
+  --bg: #77090c; --bg-deep: #5e0709; --gold: #eec257;
   --ink: #f7efe2; --muted: #e5c9bb;
 }
 body[data-book="darkness"] {
-  --bg: #0e0b0a; --bg-deep: #060404; --gold: #e9bd4d;
+  --bg: #000000; --bg-deep: #000000; --gold: #e9bd4d;
   --ink: #f2ede4; --muted: #bdb4a8;
 }
 body[data-book="brotherhood"] {
-  --bg: #16294f; --bg-deep: #101f3e; --gold: #eabf55;
+  --bg: #012257; --bg-deep: #011a43; --gold: #eabf55;
   --ink: #f4f1e6; --muted: #c3cfe7;
 }
 
@@ -78,32 +79,32 @@ a { color: inherit; }
 
 .backdrop {
   position: absolute; inset: 0; z-index: 0 !important; overflow: hidden;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, .2) 100%);
   pointer-events: none;
 }
-.motif { position: absolute; inset: 0; opacity: 0; transition: opacity .9s ease; }
-body[data-book="through"]     .motif--through,
-body[data-book="refuge"]      .motif--refuge,
-body[data-book="darkness"]    .motif--darkness,
-body[data-book="brotherhood"] .motif--brotherhood,
-body[data-book="silver"]      .motif--silver { opacity: 1; }
-.m { position: absolute; }
+.backdrop .bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: 0; transition: opacity .9s ease;
+}
+body[data-book="through"]     .bg--through,
+body[data-book="refuge"]      .bg--refuge,
+body[data-book="darkness"]    .bg--darkness,
+body[data-book="brotherhood"] .bg--brotherhood,
+body[data-book="silver"]      .bg--silver { opacity: 1; }
 
-.motif--through .m-a { width: 28rem; bottom: -5rem; left: -7rem; opacity: .32; transform: rotate(8deg); }
-.motif--through .m-b { width: 24rem; top: -5rem; right: -6rem; opacity: .26; transform: rotate(168deg); }
+/* keep each design's focal art anchored to the edge it was composed for */
+.bg--through { object-position: 100% 30%; }
+.bg--refuge { object-position: 50% 50%; }
+.bg--darkness { object-position: 100% 35%; }
+.bg--brotherhood { object-position: 50% 58%; }
+.bg--silver { object-position: 100% 45%; }
 
-.motif--refuge .m-a { width: 22rem; top: -4rem; left: -5rem; opacity: .3; }
-.motif--refuge .m-b { width: 13rem; bottom: -3rem; right: -3rem; opacity: .25; }
-
-.motif--darkness .m-a { width: 17rem; left: -3rem; top: 6rem; opacity: .5; }
-.motif--darkness .m-b { width: 17rem; right: -3rem; top: 9rem; opacity: .45; transform: scaleX(-1); }
-
-.motif--brotherhood .m-a { width: 42rem; left: -6rem; bottom: 0; opacity: .32; }
-.motif--brotherhood .m-b { width: 38rem; right: -5rem; bottom: 0; opacity: .26; transform: scaleX(-1); }
-
-.motif--silver .m-a { width: 36rem; left: -14rem; top: 2rem; opacity: .28; }
-.motif--silver .m-b { width: 8.5rem; right: 2.5rem; top: 3.5rem; opacity: .6; }
-.motif--silver .m-c { width: 6.5rem; left: 15rem; bottom: 5rem; opacity: .5; }
+/* shade so headline and copy stay readable over the art */
+.backdrop::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg,
+    rgba(0, 0, 0, .12) 0%, rgba(0, 0, 0, .04) 28%,
+    rgba(0, 0, 0, .38) 72%, rgba(0, 0, 0, .48) 100%);
+}
 
 /* ————— Header ————— */
 .site-header {
@@ -397,6 +398,9 @@ main.light h1, main.light h2, main.light h3, .site-footer .brand__name { transit
   .car-nav:active { transform: translateY(-50%) scale(.95); }
   .car-nav--prev { left: .25rem; }
   .car-nav--next { right: .25rem; }
+  /* tall crops on narrow screens: frame the ring's hollow / the corner emblem */
+  .bg--silver { object-position: 62% 40%; }
+  .bg--refuge { object-position: 18% 15%; }
   .rail { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start;
           scroll-snap-type: x mandatory; padding: .5rem .25rem 1rem; }
   .rail__book { flex: 0 0 9.5rem; scroll-snap-align: center; }
@@ -406,12 +410,6 @@ main.light h1, main.light h2, main.light h3, .site-footer .brand__name { transit
   .site-footer { grid-template-columns: 1fr; justify-items: center; text-align: center; }
 }
 @media (max-width: 520px) {
-  .backdrop .motif { opacity: 0; }
-  body[data-book="through"]     .motif--through,
-  body[data-book="refuge"]      .motif--refuge,
-  body[data-book="darkness"]    .motif--darkness,
-  body[data-book="brotherhood"] .motif--brotherhood,
-  body[data-book="silver"]      .motif--silver { opacity: .5; }
   .quote__mark { position: static; display: block; transform: none; margin-bottom: -1.4rem; }
   .newsletter__form input { min-width: 0; width: 100%; }
   .newsletter__form { width: 100%; }
