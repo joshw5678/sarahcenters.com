@@ -43,6 +43,10 @@
 
   const copy = document.querySelector(".hero__copy");
   const stage = document.querySelector(".carousel__stage");
+  const scenes = {};
+  document.querySelectorAll(".backdrop .scene").forEach((el) => {
+    scenes[el.dataset.scene] = el;
+  });
   const themeMeta = document.querySelector('meta[name="theme-color"]');
   const carButtons = [...document.querySelectorAll("[data-car-book]")];
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -76,6 +80,8 @@
 
     document.body.dataset.book = slug;
     if (themeMeta) themeMeta.content = BOOKS[slug].themeColor;
+    Object.values(scenes).forEach((scene) => scene.classList.remove("is-active"));
+    if (scenes[slug]) scenes[slug].classList.add("is-active");
     layoutCarousel();
 
     if (reduceMotion.matches) {
@@ -125,10 +131,8 @@
   // Load the non-active backdrop images once the page is idle,
   // so theme switches crossfade instantly without a fetch.
   const hydrateBackdrops = () => {
-    const narrow = window.matchMedia("(max-width: 900px)").matches;
-    document.querySelectorAll(".backdrop .bg").forEach((img) => {
-      const want = (narrow && img.dataset.srcTall) || img.dataset.src || img.getAttribute("src");
-      if (want && img.getAttribute("src") !== want) img.src = want;
+    document.querySelectorAll(".backdrop img[data-src]").forEach((img) => {
+      img.src = img.dataset.src;
       img.removeAttribute("data-src");
     });
   };
@@ -138,13 +142,17 @@
   // Raster kick: some compositors skip rasterizing freshly loaded images
   // inside 3D-transformed layers until something invalidates the frame.
   const kick = () => {
-    stage.style.transform = "translateZ(0)";
-    requestAnimationFrame(() => { stage.style.transform = ""; });
+    document.body.style.transform = "translateZ(0)";
+    void document.body.offsetHeight;
+    document.body.style.transform = "";
   };
   window.addEventListener("load", () => {
     requestAnimationFrame(kick);
     setTimeout(kick, 600);
     setTimeout(kick, 1800);
+  });
+  document.querySelectorAll(".car-book img, .backdrop img").forEach((img) => {
+    if (!img.complete) img.addEventListener("load", () => requestAnimationFrame(kick), { once: true });
   });
 
   // Newsletter — friendly inline confirmation (no backend wired up yet).

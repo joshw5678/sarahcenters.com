@@ -51,16 +51,34 @@
 
 <div class="themed" id="top">
   <div class="backdrop" aria-hidden="true">
-    <!-- full-bleed cover-art backdrops, one per book, crossfaded on switch.
-         Only the default has src; the rest hydrate from data-src once idle. -->
-    <img class="bg bg--through" data-src="images/opt/bg-through.jpg"
-         data-src-tall="images/opt/bg-through-tall.jpg" alt="" decoding="async">
-    <img class="bg bg--refuge" data-src="images/opt/bg-refuge.jpg"
-         data-src-tall="images/opt/bg-refuge-tall.jpg" alt="" decoding="async">
-    <img class="bg bg--darkness" data-src="images/opt/bg-darkness.jpg" alt="" decoding="async">
-    <img class="bg bg--brotherhood" data-src="images/opt/bg-brotherhood.jpg" alt="" decoding="async">
-    <img class="bg bg--silver" src="images/opt/bg-silver.jpg"
-         data-src-tall="images/opt/bg-silver-tall.jpg" alt="" decoding="async" fetchpriority="high">
+    <!-- cover-art scenes: each book's design sliced into up-res'd pieces
+         that animate in on switch. Only the default scene loads eagerly;
+         the rest hydrate from data-src once the page is idle. -->
+    <div class="scene scene--through" data-scene="through">
+      <div class="pgroup pgroup--tree">
+        <img class="piece piece--trunk anim-rise" data-src="images/opt/p-through-trunk.jpg" alt="" decoding="async" style="--d:.05s">
+        <img class="piece piece--canopy anim-bloom" data-src="images/opt/p-through-canopy.jpg" alt="" decoding="async" style="--d:.28s">
+      </div>
+    </div>
+    <div class="scene scene--refuge" data-scene="refuge">
+      <img class="piece piece--emb-tl anim-pop" data-src="images/opt/p-refuge-tl.jpg" alt="" decoding="async" style="--d:.05s">
+      <img class="piece piece--emb-br anim-pop" data-src="images/opt/p-refuge-br.jpg" alt="" decoding="async" style="--d:.24s">
+    </div>
+    <div class="scene scene--darkness" data-scene="darkness">
+      <div class="pgroup pgroup--phoenix">
+        <img class="piece piece--wings anim-sweep" data-src="images/opt/p-darkness-wings.jpg" alt="" decoding="async" style="--d:.05s">
+        <img class="piece piece--tail anim-rise" data-src="images/opt/p-darkness-tail.jpg" alt="" decoding="async" style="--d:.3s">
+      </div>
+    </div>
+    <div class="scene scene--brotherhood" data-scene="brotherhood">
+      <img class="piece piece--mtn anim-rise" data-src="images/opt/p-brotherhood-mtn.jpg" alt="" decoding="async" style="--d:.05s">
+      <img class="piece piece--dragon anim-fly" data-src="images/opt/p-brotherhood-dragon.jpg" alt="" decoding="async" style="--d:.5s">
+    </div>
+    <div class="scene scene--silver is-active" data-scene="silver">
+      <img class="piece piece--ring anim-spin" src="images/opt/p-silver-ring.jpg" alt="" decoding="async" fetchpriority="high" style="--d:0s">
+      <img class="piece piece--sparka anim-pop" src="images/opt/p-silver-sparka.jpg" alt="" decoding="async" style="--d:.4s">
+      <img class="piece piece--sparkb anim-pop" src="images/opt/p-silver-sparkb.jpg" alt="" decoding="async" style="--d:.6s">
+    </div>
   </div>
 
   <header class="site-header">
