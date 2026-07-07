@@ -1,7 +1,8 @@
-/* Tartarian Chronicles — book showcase switching */
+/* Tartarian Chronicles — carousel showcase + scoped theme switching */
 (() => {
   "use strict";
 
+  const ORDER = ["through", "refuge", "darkness", "brotherhood", "silver"];
   const BOOKS = {
     through: {
       number: "1",
@@ -39,18 +40,31 @@
       themeColor: "#0c6dad",
     },
   };
-  const heroSrc = (slug) => `images/opt/${slug}-hero.jpg`;
 
   const copy = document.querySelector(".hero__copy");
-  const stack = document.querySelector(".book3d__stack");
+  const stage = document.querySelector(".carousel__stage");
   const themeMeta = document.querySelector('meta[name="theme-color"]');
+  const carButtons = [...document.querySelectorAll("[data-car-book]")];
   const railButtons = [...document.querySelectorAll("[data-book-btn]")];
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-  let current = document.body.dataset.book;
+  let index = Math.max(0, ORDER.indexOf(document.body.dataset.book));
   let swapTimer = 0;
   let enterTimer = 0;
-  let coverToken = 0;
+
+  // Assign each cover its carousel slot (-2 … 2) relative to the selection.
+  function layoutCarousel() {
+    carButtons.forEach((btn) => {
+      const i = ORDER.indexOf(btn.dataset.carBook);
+      let off = (((i - index) % 5) + 5) % 5;
+      if (off > 2) off -= 5;
+      btn.dataset.pos = off;
+      btn.setAttribute("aria-pressed", String(off === 0));
+    });
+    railButtons.forEach((btn) =>
+      btn.setAttribute("aria-pressed", String(btn.dataset.bookBtn === ORDER[index]))
+    );
+  }
 
   function applyContent(slug) {
     const book = BOOKS[slug];
@@ -60,45 +74,21 @@
     }
   }
 
-  function crossfadeCover(slug, instant) {
-    const token = ++coverToken;
-    const front = stack.querySelector(".cover.is-active");
-    const back = stack.querySelector(".cover:not(.is-active)");
-    back.src = heroSrc(slug);
-    back.alt = `${BOOKS[slug].title} — Tartarian Chronicles Book ${BOOKS[slug].number}, by S.E. Centers`;
-    const swap = () => {
-      if (token !== coverToken) return; // superseded by a newer switch
-      const duration = instant ? "0s" : "";
-      back.style.transitionDuration = duration;
-      front.style.transitionDuration = duration;
-      back.classList.add("is-active");
-      front.classList.remove("is-active");
-      front.alt = "";
-    };
-    if (back.decode) back.decode().then(swap).catch(swap);
-    else if (back.complete) swap();
-    else back.onload = swap;
-  }
-
-  function switchBook(slug) {
-    if (slug === current || !BOOKS[slug]) return;
-    current = slug;
+  function switchBook(slug, { scrollToTop = false } = {}) {
+    if (slug === ORDER[index] || !BOOKS[slug]) return;
+    index = ORDER.indexOf(slug);
 
     document.body.dataset.book = slug;
     if (themeMeta) themeMeta.content = BOOKS[slug].themeColor;
-    railButtons.forEach((btn) =>
-      btn.setAttribute("aria-pressed", String(btn.dataset.bookBtn === slug))
-    );
+    layoutCarousel();
 
-    // If the showcase is out of view, bring it back so the change is seen.
-    const hero = document.querySelector(".hero");
-    if (hero.getBoundingClientRect().bottom < 140) {
-      hero.scrollIntoView({ behavior: reduceMotion.matches ? "auto" : "smooth" });
+    const themed = document.querySelector(".themed");
+    if (scrollToTop && themed.getBoundingClientRect().bottom < 140) {
+      themed.scrollIntoView({ behavior: reduceMotion.matches ? "auto" : "smooth" });
     }
 
     if (reduceMotion.matches) {
       applyContent(slug);
-      crossfadeCover(slug, true);
       return;
     }
 
@@ -107,7 +97,6 @@
     clearTimeout(enterTimer);
     copy.classList.remove("is-entering");
     copy.classList.add("is-leaving");
-    crossfadeCover(slug, false);
     swapTimer = setTimeout(() => {
       applyContent(slug);
       copy.classList.remove("is-leaving");
@@ -116,21 +105,34 @@
     }, 330);
   }
 
-  railButtons.forEach((btn) =>
-    btn.addEventListener("click", () => switchBook(btn.dataset.bookBtn))
-  );
+  const step = (dir) => switchBook(ORDER[(index + dir + 5) % 5]);
 
-  // Warm the cache for the other covers once the page is idle,
-  // so every switch crossfades instantly.
-  const preload = () => {
-    Object.keys(BOOKS)
-      .filter((slug) => slug !== current)
-      .forEach((slug) => {
-        new Image().src = heroSrc(slug);
-      });
-  };
-  if ("requestIdleCallback" in window) requestIdleCallback(preload, { timeout: 2500 });
-  else setTimeout(preload, 1200);
+  carButtons.forEach((btn) =>
+    btn.addEventListener("click", () => switchBook(btn.dataset.carBook))
+  );
+  railButtons.forEach((btn) =>
+    btn.addEventListener("click", () => switchBook(btn.dataset.bookBtn, { scrollToTop: true }))
+  );
+  document.querySelector(".car-nav--prev").addEventListener("click", () => step(-1));
+  document.querySelector(".car-nav--next").addEventListener("click", () => step(1));
+
+  // Arrow keys rotate the carousel while focus is inside it.
+  document.querySelector(".carousel").addEventListener("keydown", (event) => {
+    if (event.key === "ArrowLeft") { event.preventDefault(); step(-1); }
+    if (event.key === "ArrowRight") { event.preventDefault(); step(1); }
+  });
+
+  // Horizontal swipe on the stage.
+  let touchX = null;
+  stage.addEventListener("pointerdown", (event) => { touchX = event.clientX; });
+  stage.addEventListener("pointerup", (event) => {
+    if (touchX === null) return;
+    const dx = event.clientX - touchX;
+    touchX = null;
+    if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1);
+  });
+
+  layoutCarousel();
 
   // Newsletter — friendly inline confirmation (no backend wired up yet).
   const form = document.querySelector(".newsletter__form");

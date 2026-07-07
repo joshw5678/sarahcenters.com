@@ -9,7 +9,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-<link rel="preload" as="image" href="images/opt/silver-hero.jpg" fetchpriority="high">
 <link rel="stylesheet" href="src/styles.css">
 <script src="src/main.js" defer></script>
 </head>
@@ -25,6 +24,9 @@
       <rect x="0" y="11" width="6" height="2" rx="1"/>
       <rect x="50" y="11" width="6" height="2" rx="1"/>
     </g>
+  </symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24">
+    <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5L8 12l6.5 6.5"/>
   </symbol>
   <symbol id="i-diamonds" viewBox="0 0 24 24">
     <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
@@ -78,102 +80,132 @@
   </symbol>
 </svg>
 
-<div class="backdrop" aria-hidden="true">
-  <div class="motif motif--through">
-    <svg class="m m-a" viewBox="0 0 400 420"><g fill="none" stroke="#93abd2" stroke-width="11" stroke-linecap="round">
-      <path d="M205 40 C175 130 215 215 188 300 C172 355 178 390 205 420"/>
-      <path d="M192 195 C140 155 88 138 36 108"/>
-      <path d="M196 262 C140 262 88 284 40 310"/>
-      <path d="M208 145 C258 105 305 76 356 55"/>
-      <path d="M212 232 C270 232 320 258 366 290"/>
-      <path d="M186 110 C155 82 120 52 92 28"/>
-    </g></svg>
-    <svg class="m m-b" viewBox="0 0 400 420"><g fill="none" stroke="#93abd2" stroke-width="11" stroke-linecap="round">
-      <path d="M205 40 C175 130 215 215 188 300 C172 355 178 390 205 420"/>
-      <path d="M192 195 C140 155 88 138 36 108"/>
-      <path d="M196 262 C140 262 88 284 40 310"/>
-      <path d="M208 145 C258 105 305 76 356 55"/>
-      <path d="M212 232 C270 232 320 258 366 290"/>
-    </g></svg>
-  </div>
-  <div class="motif motif--refuge">
-    <svg class="m m-a" viewBox="0 0 320 320"><g transform="rotate(45 160 160)" fill="none" stroke="#e8963f" stroke-width="7">
-      <rect x="58" y="58" width="62" height="62"/><rect x="129" y="58" width="62" height="62"/>
-      <rect x="58" y="129" width="62" height="62"/><rect x="129" y="129" width="62" height="62" fill="#e8963f" fill-opacity=".35"/>
-      <rect x="200" y="129" width="62" height="62"/><rect x="129" y="200" width="62" height="62"/>
-    </g></svg>
-    <svg class="m m-b" viewBox="0 0 320 320"><g transform="rotate(45 160 160)" fill="none" stroke="#e8963f" stroke-width="7">
-      <rect x="93" y="93" width="66" height="66"/><rect x="166" y="93" width="66" height="66" fill="#e8963f" fill-opacity=".3"/>
-      <rect x="93" y="166" width="66" height="66"/>
-    </g></svg>
-  </div>
-  <div class="motif motif--darkness">
-    <svg class="m m-a" viewBox="0 0 300 520"><g fill="none" stroke="#c11f1f" stroke-width="16" stroke-linecap="round">
-      <path d="M38 500 C58 380 62 270 138 175"/>
-      <path d="M76 505 C118 400 132 315 205 240"/>
-      <path d="M120 512 C172 435 205 372 268 318"/>
-      <path d="M26 360 C48 270 92 195 158 130"/>
-      <path d="M60 240 C95 175 140 120 196 78"/>
-    </g></svg>
-    <svg class="m m-b" viewBox="0 0 300 520"><g fill="none" stroke="#c11f1f" stroke-width="16" stroke-linecap="round">
-      <path d="M38 500 C58 380 62 270 138 175"/>
-      <path d="M76 505 C118 400 132 315 205 240"/>
-      <path d="M120 512 C172 435 205 372 268 318"/>
-      <path d="M26 360 C48 270 92 195 158 130"/>
-    </g></svg>
-  </div>
-  <div class="motif motif--brotherhood">
-    <svg class="m m-a" viewBox="0 0 640 220" preserveAspectRatio="none"><g fill="#eabf55">
-      <path d="M0 220 L95 55 L160 145 L225 30 L330 220 Z"/>
-      <path d="M255 220 L350 85 L430 220 Z" opacity=".65"/>
-      <path d="M400 220 L500 100 L640 220 Z" opacity=".45"/>
-    </g></svg>
-    <svg class="m m-b" viewBox="0 0 640 220" preserveAspectRatio="none"><g fill="#eabf55">
-      <path d="M0 220 L120 90 L215 220 Z" opacity=".55"/>
-      <path d="M170 220 L290 40 L365 140 L420 70 L545 220 Z"/>
-    </g></svg>
-  </div>
-  <div class="motif motif--silver">
-    <svg class="m m-a" viewBox="0 0 600 600">
-      <circle cx="300" cy="300" r="205" fill="none" stroke="#eaf4fb" stroke-width="72" stroke-dasharray="5 9 13 6 9 15 4 11 7 13 6 8"/>
-      <circle cx="300" cy="300" r="140" fill="none" stroke="#eaf4fb" stroke-width="30" stroke-dasharray="9 11 5 13 10 7" opacity=".7"/>
-    </svg>
-    <svg class="m m-b" viewBox="0 0 120 120"><g fill="#f3f9ff">
-      <path d="M30 6l3.4 17.6L51 27l-17.6 3.4L30 48l-3.4-17.6L9 27l17.6-3.4z"/>
-      <path d="M82 62l2.4 12.6L97 77l-12.6 2.4L82 92l-2.4-12.6L67 77l12.6-2.4z"/>
-      <path d="M100 18l1.6 8.4 8.4 1.6-8.4 1.6-1.6 8.4-1.6-8.4-8.4-1.6 8.4-1.6z"/>
-    </g></svg>
-  </div>
-</div>
-
-<header class="site-header">
-  <a class="brand" href="#top" aria-label="Tartarian Chronicles — home">
-    <span class="brand__name">Tartarian<br>Chronicles</span>
-    <svg class="brand__orn" width="34" height="15"><use href="#orn"/></svg>
-  </a>
-  <nav class="site-nav" aria-label="Primary">
-    <a href="#top">The Series</a>
-    <a href="#books">Books</a>
-    <a href="#about">About</a>
-    <a href="#extras">Extras</a>
-    <a href="#reviews">Reviews</a>
-  </nav>
-  <a class="btn btn--solid btn--sm" href="#books">Order Now</a>
-</header>
-
-<main id="top">
-  <section class="hero" aria-label="Featured book">
-    <div class="hero__book">
-      <div class="book3d">
-        <div class="book3d__inner">
-          <div class="book3d__stack">
-            <img class="cover is-active" src="images/opt/silver-hero.jpg" width="943" height="1500"
-                 alt="Silver Light — Tartarian Chronicles Book 5, by S.E. Centers" fetchpriority="high" decoding="async">
-            <img class="cover" alt="" width="943" height="1500" decoding="async">
-          </div>
-        </div>
-      </div>
+<div class="themed" id="top">
+  <div class="backdrop" aria-hidden="true">
+    <div class="motif motif--through">
+      <svg class="m m-a" viewBox="0 0 400 420"><g fill="none" stroke="#93abd2" stroke-width="11" stroke-linecap="round">
+        <path d="M205 40 C175 130 215 215 188 300 C172 355 178 390 205 420"/>
+        <path d="M192 195 C140 155 88 138 36 108"/>
+        <path d="M196 262 C140 262 88 284 40 310"/>
+        <path d="M208 145 C258 105 305 76 356 55"/>
+        <path d="M212 232 C270 232 320 258 366 290"/>
+        <path d="M186 110 C155 82 120 52 92 28"/>
+      </g></svg>
+      <svg class="m m-b" viewBox="0 0 400 420"><g fill="none" stroke="#93abd2" stroke-width="11" stroke-linecap="round">
+        <path d="M205 40 C175 130 215 215 188 300 C172 355 178 390 205 420"/>
+        <path d="M192 195 C140 155 88 138 36 108"/>
+        <path d="M196 262 C140 262 88 284 40 310"/>
+        <path d="M208 145 C258 105 305 76 356 55"/>
+        <path d="M212 232 C270 232 320 258 366 290"/>
+      </g></svg>
     </div>
+    <div class="motif motif--refuge">
+      <svg class="m m-a" viewBox="0 0 320 320"><g transform="rotate(45 160 160)" fill="none" stroke="#e8963f" stroke-width="7">
+        <rect x="58" y="58" width="62" height="62"/><rect x="129" y="58" width="62" height="62"/>
+        <rect x="58" y="129" width="62" height="62"/><rect x="129" y="129" width="62" height="62" fill="#e8963f" fill-opacity=".35"/>
+        <rect x="200" y="129" width="62" height="62"/><rect x="129" y="200" width="62" height="62"/>
+      </g></svg>
+      <svg class="m m-b" viewBox="0 0 320 320"><g transform="rotate(45 160 160)" fill="none" stroke="#e8963f" stroke-width="7">
+        <rect x="93" y="93" width="66" height="66"/><rect x="166" y="93" width="66" height="66" fill="#e8963f" fill-opacity=".3"/>
+        <rect x="93" y="166" width="66" height="66"/>
+      </g></svg>
+    </div>
+    <div class="motif motif--darkness">
+      <svg class="m m-a" viewBox="0 0 300 520"><g fill="none" stroke="#c11f1f" stroke-width="16" stroke-linecap="round">
+        <path d="M38 500 C58 380 62 270 138 175"/>
+        <path d="M76 505 C118 400 132 315 205 240"/>
+        <path d="M120 512 C172 435 205 372 268 318"/>
+        <path d="M26 360 C48 270 92 195 158 130"/>
+        <path d="M60 240 C95 175 140 120 196 78"/>
+      </g></svg>
+      <svg class="m m-b" viewBox="0 0 300 520"><g fill="none" stroke="#c11f1f" stroke-width="16" stroke-linecap="round">
+        <path d="M38 500 C58 380 62 270 138 175"/>
+        <path d="M76 505 C118 400 132 315 205 240"/>
+        <path d="M120 512 C172 435 205 372 268 318"/>
+        <path d="M26 360 C48 270 92 195 158 130"/>
+      </g></svg>
+    </div>
+    <div class="motif motif--brotherhood">
+      <svg class="m m-a" viewBox="0 0 640 220" preserveAspectRatio="none"><g fill="#eabf55">
+        <path d="M0 220 L95 55 L160 145 L225 30 L330 220 Z"/>
+        <path d="M255 220 L350 85 L430 220 Z" opacity=".65"/>
+        <path d="M400 220 L500 100 L640 220 Z" opacity=".45"/>
+      </g></svg>
+      <svg class="m m-b" viewBox="0 0 640 220" preserveAspectRatio="none"><g fill="#eabf55">
+        <path d="M0 220 L120 90 L215 220 Z" opacity=".55"/>
+        <path d="M170 220 L290 40 L365 140 L420 70 L545 220 Z"/>
+      </g></svg>
+    </div>
+    <div class="motif motif--silver">
+      <svg class="m m-a" viewBox="0 0 600 600">
+        <circle cx="300" cy="300" r="205" fill="none" stroke="#eaf4fb" stroke-width="72" stroke-dasharray="5 9 13 6 9 15 4 11 7 13 6 8"/>
+        <circle cx="300" cy="300" r="140" fill="none" stroke="#eaf4fb" stroke-width="30" stroke-dasharray="9 11 5 13 10 7" opacity=".7"/>
+      </svg>
+      <svg class="m m-b" viewBox="0 0 120 120"><g fill="#f3f9ff">
+        <path d="M30 6l3.4 17.6L51 27l-17.6 3.4L30 48l-3.4-17.6L9 27l17.6-3.4z"/>
+        <path d="M82 62l2.4 12.6L97 77l-12.6 2.4L82 92l-2.4-12.6L67 77l12.6-2.4z"/>
+        <path d="M100 18l1.6 8.4 8.4 1.6-8.4 1.6-1.6 8.4-1.6-8.4-8.4-1.6 8.4-1.6z"/>
+      </g></svg>
+    </div>
+  </div>
+
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Tartarian Chronicles — home">
+      <span class="brand__name">Tartarian<br>Chronicles</span>
+      <svg class="brand__orn" width="34" height="15"><use href="#orn"/></svg>
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="#top">The Series</a>
+      <a href="#books">Books</a>
+      <a href="#about">About</a>
+      <a href="#extras">Extras</a>
+      <a href="#reviews">Reviews</a>
+    </nav>
+    <a class="btn btn--solid btn--sm" href="#books">Order Now</a>
+  </header>
+
+  <section class="hero" aria-label="Featured book">
+    <div class="carousel">
+      <button class="car-nav car-nav--prev" type="button" aria-label="Previous book">
+        <svg width="22" height="22"><use href="#i-chev"/></svg>
+      </button>
+      <div class="carousel__stage" role="group" aria-roledescription="carousel" aria-label="The five books of the Tartarian Chronicles">
+        <button class="car-book" type="button" data-car-book="through" aria-pressed="false">
+          <img src="images/opt/through-thumb.jpg"
+               srcset="images/opt/through-thumb.jpg 340w, images/opt/through-hero.jpg 943w"
+               sizes="(max-width: 700px) 44vw, 260px"
+               width="943" height="1500" decoding="async" alt="Book 1: Through the Veil">
+        </button>
+        <button class="car-book" type="button" data-car-book="refuge" aria-pressed="false">
+          <img src="images/opt/refuge-thumb.jpg"
+               srcset="images/opt/refuge-thumb.jpg 340w, images/opt/refuge-hero.jpg 943w"
+               sizes="(max-width: 700px) 44vw, 260px"
+               width="943" height="1500" decoding="async" alt="Book 2: The Refuge">
+        </button>
+        <button class="car-book" type="button" data-car-book="darkness" aria-pressed="false">
+          <img src="images/opt/darkness-thumb.jpg"
+               srcset="images/opt/darkness-thumb.jpg 340w, images/opt/darkness-hero.jpg 943w"
+               sizes="(max-width: 700px) 44vw, 260px"
+               width="943" height="1500" decoding="async" alt="Book 3: Out of Darkness">
+        </button>
+        <button class="car-book" type="button" data-car-book="brotherhood" aria-pressed="false">
+          <img src="images/opt/brotherhood-thumb.jpg"
+               srcset="images/opt/brotherhood-thumb.jpg 340w, images/opt/brotherhood-hero.jpg 943w"
+               sizes="(max-width: 700px) 44vw, 260px"
+               width="943" height="1500" decoding="async" alt="Book 4: Brotherhood">
+        </button>
+        <button class="car-book" type="button" data-car-book="silver" aria-pressed="true">
+          <img src="images/opt/silver-thumb.jpg"
+               srcset="images/opt/silver-thumb.jpg 340w, images/opt/silver-hero.jpg 943w"
+               sizes="(max-width: 700px) 44vw, 260px"
+               width="943" height="1500" decoding="async" fetchpriority="high" alt="Book 5: Silver Light">
+        </button>
+      </div>
+      <button class="car-nav car-nav--next" type="button" aria-label="Next book">
+        <svg width="22" height="22"><use href="#i-chev"/></svg>
+      </button>
+    </div>
+
     <div class="hero__copy" aria-live="polite">
       <p class="eyebrow" data-stagger style="--i:0">Book <span data-field="number">5</span></p>
       <h1 class="hero__title" data-field="title" data-stagger style="--i:1">Silver Light</h1>
@@ -186,7 +218,9 @@
       </div>
     </div>
   </section>
+</div>
 
+<main class="light">
   <section class="series" id="books">
     <h2 class="section-title"><span class="dot">·</span> The Tartarian Chronicles <span class="dot">·</span></h2>
     <div class="rail" role="group" aria-label="Choose a book to feature">
