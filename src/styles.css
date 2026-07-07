@@ -89,20 +89,21 @@ body[data-book="brotherhood"] .motif--brotherhood,
 body[data-book="silver"]      .motif--silver { opacity: 1; }
 .m { position: absolute; }
 
-.motif--through .m-a { width: 30rem; top: -5rem; left: -9rem; opacity: .28; transform: rotate(-14deg); }
-.motif--through .m-b { width: 26rem; bottom: -7rem; right: -9rem; opacity: .2; transform: rotate(160deg); }
+.motif--through .m-a { width: 28rem; bottom: -5rem; left: -7rem; opacity: .32; transform: rotate(8deg); }
+.motif--through .m-b { width: 24rem; top: -5rem; right: -6rem; opacity: .26; transform: rotate(168deg); }
 
-.motif--refuge .m-a { width: 24rem; top: -6rem; left: -7rem; opacity: .32; }
-.motif--refuge .m-b { width: 16rem; bottom: -4rem; right: -4rem; opacity: .26; }
+.motif--refuge .m-a { width: 22rem; top: -4rem; left: -5rem; opacity: .3; }
+.motif--refuge .m-b { width: 13rem; bottom: -3rem; right: -3rem; opacity: .25; }
 
-.motif--darkness .m-a { width: 18rem; left: -4rem; top: 4rem; opacity: .5; }
-.motif--darkness .m-b { width: 18rem; right: -4rem; top: 7rem; opacity: .45; transform: scaleX(-1); }
+.motif--darkness .m-a { width: 17rem; left: -3rem; top: 6rem; opacity: .5; }
+.motif--darkness .m-b { width: 17rem; right: -3rem; top: 9rem; opacity: .45; transform: scaleX(-1); }
 
-.motif--brotherhood .m-a { width: 40rem; left: -5rem; bottom: 0; opacity: .3; }
-.motif--brotherhood .m-b { width: 36rem; right: -4rem; bottom: 0; opacity: .24; transform: scaleX(-1); }
+.motif--brotherhood .m-a { width: 42rem; left: -6rem; bottom: 0; opacity: .32; }
+.motif--brotherhood .m-b { width: 38rem; right: -5rem; bottom: 0; opacity: .26; transform: scaleX(-1); }
 
-.motif--silver .m-a { width: 34rem; left: -13rem; top: 3rem; opacity: .24; }
-.motif--silver .m-b { width: 8rem; right: 2.5rem; top: 4rem; opacity: .55; }
+.motif--silver .m-a { width: 36rem; left: -14rem; top: 2rem; opacity: .28; }
+.motif--silver .m-b { width: 8.5rem; right: 2.5rem; top: 3.5rem; opacity: .6; }
+.motif--silver .m-c { width: 6.5rem; left: 15rem; bottom: 5rem; opacity: .5; }
 
 /* ————— Header ————— */
 .site-header {
@@ -115,7 +116,7 @@ body[data-book="silver"]      .motif--silver { opacity: 1; }
   display: block;
   font-family: Oswald, "Arial Narrow", sans-serif;
   font-weight: 600; text-transform: uppercase;
-  font-size: 1.05rem; line-height: 1.15; letter-spacing: .18em;
+  font-size: 1.2rem; line-height: 1.15; letter-spacing: .22em;
   color: var(--gold); transition: color .7s ease;
 }
 .brand__orn { color: var(--gold); margin-top: .45rem; transition: color .7s ease; }
@@ -163,42 +164,48 @@ body[data-book="silver"]      .motif--silver { opacity: 1; }
 .carousel__stage {
   position: relative; flex: 1; min-width: 0;
   height: calc(var(--cw) * 1.72);
-  perspective: 1600px;
 }
 .car-book {
   position: absolute; left: 50%; top: 50%;
   width: var(--cw);
   padding: 0; border: 0; background: none; cursor: pointer;
   border-radius: 4px;
-  transition: transform .6s cubic-bezier(.22, .75, .25, 1), filter .6s ease, opacity .6s ease;
-  will-change: transform;
+  transition: transform .6s cubic-bezier(.22, .75, .25, 1), opacity .6s ease;
 }
 .car-book img {
   width: 100%; aspect-ratio: 943 / 1500; object-fit: cover;
   border-radius: 3px 7px 7px 3px;
   box-shadow: 0 22px 44px rgba(0, 0, 0, .45);
 }
+/* dimming veil — plain compositing, no filters (they raster unreliably) */
+.car-book::after {
+  content: ""; position: absolute; inset: 0;
+  background: #000; opacity: 0; border-radius: 3px 7px 7px 3px;
+  transition: opacity .6s ease; pointer-events: none;
+}
 .car-book[data-pos="0"] {
   transform: translate(-50%, -50%) scale(1);
-  z-index: 6; filter: brightness(1); cursor: default;
+  z-index: 6; cursor: default;
 }
 .car-book[data-pos="-1"] {
-  transform: translate(-50%, -50%) translateX(-72%) scale(.78) rotateY(18deg);
-  z-index: 4; filter: brightness(.68);
+  transform: translate(-50%, -50%) translateX(-72%) scale(.78) perspective(1100px) rotateY(18deg);
+  z-index: 4;
 }
 .car-book[data-pos="1"] {
-  transform: translate(-50%, -50%) translateX(72%) scale(.78) rotateY(-18deg);
-  z-index: 4; filter: brightness(.68);
+  transform: translate(-50%, -50%) translateX(72%) scale(.78) perspective(1100px) rotateY(-18deg);
+  z-index: 4;
 }
+.car-book[data-pos="-1"]::after, .car-book[data-pos="1"]::after { opacity: .34; }
 .car-book[data-pos="-2"] {
-  transform: translate(-50%, -50%) translateX(-128%) scale(.62) rotateY(25deg);
-  z-index: 2; filter: brightness(.5); opacity: .92;
+  transform: translate(-50%, -50%) translateX(-128%) scale(.62) perspective(1100px) rotateY(25deg);
+  z-index: 2; opacity: .94;
 }
 .car-book[data-pos="2"] {
-  transform: translate(-50%, -50%) translateX(128%) scale(.62) rotateY(-25deg);
-  z-index: 2; filter: brightness(.5); opacity: .92;
+  transform: translate(-50%, -50%) translateX(128%) scale(.62) perspective(1100px) rotateY(-25deg);
+  z-index: 2; opacity: .94;
 }
-.car-book:not([data-pos="0"]):hover { filter: brightness(.88); }
+.car-book[data-pos="-2"]::after, .car-book[data-pos="2"]::after { opacity: .52; }
+.car-book:not([data-pos="0"]):hover::after { opacity: .14; }
 .car-book[data-pos="0"] img { animation: float 7s ease-in-out infinite alternate; }
 @keyframes float { from { transform: translateY(-4px); } to { transform: translateY(6px); } }
 
@@ -290,51 +297,21 @@ main.light h1, main.light h2, main.light h3, .site-footer .brand__name { transit
 .rail {
   display: flex; justify-content: center; gap: clamp(.8rem, 2.4vw, 1.8rem);
   max-width: 68rem; margin: 0 auto 2.2rem;
+  list-style: none; padding: 0;
 }
-.rail__book {
-  flex: 0 1 11.5rem; min-width: 0;
-  padding: 0; border: 0; background: none; cursor: pointer;
-  border-radius: 4px;
-  transition: transform .3s ease;
-}
+.rail__book { flex: 0 1 11.5rem; min-width: 0; }
 .rail__book img {
   width: 100%; aspect-ratio: 340 / 541; object-fit: cover;
   border-radius: 3px;
   border: 1px solid #dcd2bd;
   box-shadow: 0 8px 20px rgba(52, 42, 22, .18);
-  transition: border-color .3s ease, box-shadow .4s ease, transform .3s ease;
-}
-.rail__book:hover { transform: translateY(-6px); }
-.rail__book:hover img { border-color: var(--gold); }
-.rail__book[aria-pressed="true"] { transform: translateY(-6px) scale(1.04); }
-.rail__book[aria-pressed="true"] img {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 1px var(--gold), 0 0 26px var(--glow), 0 10px 24px rgba(52, 42, 22, .22);
 }
 .rail__caption {
   display: block; margin-top: .7rem;
   font-family: Oswald, sans-serif; font-size: .72rem;
   letter-spacing: .3em; text-transform: uppercase;
-  color: var(--muted); transition: color .3s ease;
+  color: var(--muted);
 }
-.rail__book[aria-pressed="true"] .rail__caption,
-.rail__book:hover .rail__caption { color: var(--gold); }
-
-/* ————— Features ————— */
-.features {
-  max-width: 72rem; margin: 0 auto; text-align: center;
-  padding: clamp(2.5rem, 6vw, 4.5rem) clamp(1rem, 4vw, 2.5rem);
-}
-.features__title { font-size: clamp(1.3rem, 3vw, 1.75rem); font-weight: 500; letter-spacing: .3em; margin-bottom: 2.6rem; }
-.features__grid {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; grid-template-columns: repeat(4, 1fr);
-}
-.features__grid li { padding: 0 clamp(.8rem, 2.5vw, 2rem); }
-.features__grid li + li { border-left: 1px solid var(--hairline); }
-.features__icon { color: var(--gold); margin-bottom: 1rem; }
-.features__grid h3 { font-size: .9rem; font-weight: 500; letter-spacing: .22em; margin-bottom: .6rem; }
-.features__grid p { color: var(--muted); font-size: .95rem; margin: 0; }
 
 /* ————— Quote ————— */
 .quote {
@@ -420,8 +397,6 @@ main.light h1, main.light h2, main.light h3, .site-footer .brand__name { transit
   .car-nav:active { transform: translateY(-50%) scale(.95); }
   .car-nav--prev { left: .25rem; }
   .car-nav--next { right: .25rem; }
-  .features__grid { grid-template-columns: 1fr 1fr; gap: 2.2rem 0; }
-  .features__grid li:nth-child(3) { border-left: 0; }
   .rail { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start;
           scroll-snap-type: x mandatory; padding: .5rem .25rem 1rem; }
   .rail__book { flex: 0 0 9.5rem; scroll-snap-align: center; }
@@ -437,8 +412,6 @@ main.light h1, main.light h2, main.light h3, .site-footer .brand__name { transit
   body[data-book="darkness"]    .motif--darkness,
   body[data-book="brotherhood"] .motif--brotherhood,
   body[data-book="silver"]      .motif--silver { opacity: .5; }
-  .features__grid { grid-template-columns: 1fr; gap: 0; }
-  .features__grid li + li { border-left: 0; border-top: 1px solid var(--hairline); padding-top: 1.5rem; margin-top: 1.5rem; }
   .quote__mark { position: static; display: block; transform: none; margin-bottom: -1.4rem; }
   .newsletter__form input { min-width: 0; width: 100%; }
   .newsletter__form { width: 100%; }

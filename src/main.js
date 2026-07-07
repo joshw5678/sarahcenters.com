@@ -45,7 +45,6 @@
   const stage = document.querySelector(".carousel__stage");
   const themeMeta = document.querySelector('meta[name="theme-color"]');
   const carButtons = [...document.querySelectorAll("[data-car-book]")];
-  const railButtons = [...document.querySelectorAll("[data-book-btn]")];
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   let index = Math.max(0, ORDER.indexOf(document.body.dataset.book));
@@ -61,9 +60,6 @@
       btn.dataset.pos = off;
       btn.setAttribute("aria-pressed", String(off === 0));
     });
-    railButtons.forEach((btn) =>
-      btn.setAttribute("aria-pressed", String(btn.dataset.bookBtn === ORDER[index]))
-    );
   }
 
   function applyContent(slug) {
@@ -74,18 +70,13 @@
     }
   }
 
-  function switchBook(slug, { scrollToTop = false } = {}) {
+  function switchBook(slug) {
     if (slug === ORDER[index] || !BOOKS[slug]) return;
     index = ORDER.indexOf(slug);
 
     document.body.dataset.book = slug;
     if (themeMeta) themeMeta.content = BOOKS[slug].themeColor;
     layoutCarousel();
-
-    const themed = document.querySelector(".themed");
-    if (scrollToTop && themed.getBoundingClientRect().bottom < 140) {
-      themed.scrollIntoView({ behavior: reduceMotion.matches ? "auto" : "smooth" });
-    }
 
     if (reduceMotion.matches) {
       applyContent(slug);
@@ -109,9 +100,6 @@
 
   carButtons.forEach((btn) =>
     btn.addEventListener("click", () => switchBook(btn.dataset.carBook))
-  );
-  railButtons.forEach((btn) =>
-    btn.addEventListener("click", () => switchBook(btn.dataset.bookBtn, { scrollToTop: true }))
   );
   document.querySelector(".car-nav--prev").addEventListener("click", () => step(-1));
   document.querySelector(".car-nav--next").addEventListener("click", () => step(1));
