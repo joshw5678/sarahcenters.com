@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 900" role="img" aria-label="Brotherhood cover-inspired artwork">
+  <rect width="600" height="900" fill="#09306d"/>
+  <g fill="#f0c64d" transform="translate(0 230)">
+    <path d="M-8 372 L125 140 L209 265 L292 95 L386 260 L484 120 L616 372 L460 300 L385 338 L300 242 L214 348 L128 270 Z"/>
+    <path d="M145 510 L254 330 L307 420 L379 300 L488 510 L394 463 L306 497 L218 465 Z" opacity=".88"/>
+  </g>
+  <g fill="#f0c64d" transform="translate(360 118)">
+    <path d="M53 34 C94 16 116 35 133 58 C101 48 77 51 61 77 C47 62 30 52 5 46 C24 44 39 40 53 34Z"/>
+    <path d="M56 36 C44 18 33 6 16 0 C23 23 34 39 56 36Z"/>
+  </g>
+  <text x="300" y="111" fill="#f0c64d" font-family="Impact, 'Arial Narrow', sans-serif" font-size="67" text-anchor="middle" letter-spacing="6">BROTHERHOOD</text>
+  <text x="300" y="160" fill="#f0c64d" font-family="Impact, 'Arial Narrow', sans-serif" font-size="20" text-anchor="middle" letter-spacing="6">TARTARIAN CHRONICLES</text>
+  <text x="300" y="192" fill="#f0c64d" font-family="Impact, 'Arial Narrow', sans-serif" font-size="18" text-anchor="middle" letter-spacing="5">BOOK 4</text>
+  <text x="300" y="826" fill="#f0c64d" font-family="Impact, 'Arial Narrow', sans-serif" font-size="48" text-anchor="middle" letter-spacing="11">S.E. CENTERS</text>
+</svg>
