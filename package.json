@@ -1,0 +1,20 @@
+{
+  "name": "tartarian-site",
+  "version": "1.0.0",
+  "description": "S.E. Centers author site with Stripe checkout, orders, and owner admin.",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "express": "^4.19.2",
+    "multer": "^2.0.2",
+    "stripe": "^18.3.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

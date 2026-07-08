@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Owner Admin — S.E. Centers</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles.css">
+<script src="src/admin.js" defer></script>
+</head>
+<body>
+<main class="light admin-page">
+  <section class="admin-login" data-login-panel>
+    <a class="receipt-brand" href="/">S.E. Centers</a>
+    <form class="admin-login__box" data-login-form>
+      <p class="cart-panel__eyebrow">Owner Admin</p>
+      <h1>Sign In</h1>
+      <label for="admin-password">Password</label>
+      <input id="admin-password" name="password" type="password" autocomplete="current-password" required>
+      <button class="btn btn--solid" type="submit">Enter Admin</button>
+      <p class="admin-message" data-login-message role="status"></p>
+    </form>
+  </section>
+
+  <section class="admin-shell" data-admin-app hidden>
+    <header class="admin-topbar">
+      <div>
+        <a class="receipt-brand" href="/">S.E. Centers</a>
+        <h1>Owner Admin</h1>
+      </div>
+      <button class="btn btn--outline btn--sm" type="button" data-logout>Sign Out</button>
+    </header>
+
+    <section class="admin-section" aria-labelledby="orders-title">
+      <div class="admin-section__head">
+        <div>
+          <p class="cart-panel__eyebrow">Order Desk</p>
+          <h2 id="orders-title">Orders</h2>
+        </div>
+        <div class="admin-actions">
+          <select data-order-filter aria-label="Filter orders">
+            <option value="">All Orders</option>
+            <option value="paid">Paid</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+            <option value="canceled">Canceled</option>
+          </select>
+          <button class="btn btn--outline btn--sm" type="button" data-refresh-orders>Refresh</button>
+        </div>
+      </div>
+      <div class="admin-list" data-orders-list></div>
+    </section>
+
+    <section class="admin-section" aria-labelledby="upload-title">
+      <div class="admin-section__head">
+        <div>
+          <p class="cart-panel__eyebrow">Books Section</p>
+          <h2 id="upload-title">Upload New Book</h2>
+        </div>
+      </div>
+      <form class="book-form" data-book-form enctype="multipart/form-data">
+        <label>
+          Cover Image
+          <input name="cover" type="file" accept="image/png,image/jpeg,image/webp" required>
+        </label>
+        <label>
+          Title
+          <input name="title" type="text" maxlength="160" required>
+        </label>
+        <label>
+          Book Number
+          <input name="number" type="text" maxlength="24" placeholder="6">
+        </label>
+        <label>
+          Price
+          <input name="price" type="number" min="0.5" step="0.01" value="19.99" required>
+        </label>
+        <label>
+          Currency
+          <input name="currency" type="text" maxlength="3" value="usd" required>
+        </label>
+        <label class="book-form__wide">
+          Tagline
+          <input name="tagline" type="text" maxlength="240">
+        </label>
+        <label class="book-form__wide">
+          Description
+          <textarea name="desc" rows="4" maxlength="1200"></textarea>
+        </label>
+        <label class="admin-checkbox">
+          <input name="active" type="checkbox" checked>
+          Publish in the public books section
+        </label>
+        <button class="btn btn--solid" type="submit">Upload Book</button>
+        <p class="admin-message book-form__wide" data-book-message role="status"></p>
+      </form>
+    </section>
+
+    <section class="admin-section" aria-labelledby="catalog-title">
+      <div class="admin-section__head">
+        <div>
+          <p class="cart-panel__eyebrow">Public Catalog</p>
+          <h2 id="catalog-title">Books</h2>
+        </div>
+      </div>
+      <div class="admin-list admin-list--compact" data-books-list></div>
+    </section>
+  </section>
+</main>
+</body>
+</html>

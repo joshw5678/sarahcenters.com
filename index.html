@@ -25,6 +25,12 @@
       <rect x="50" y="11" width="6" height="2" rx="1"/>
     </g>
   </symbol>
+  <!-- Tartarian emblem from the book covers: saltire cross with a
+       four-diamond cluster in each quadrant -->
+  <symbol id="emblem" viewBox="0 0 24 24">
+    <path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M4.6 4.6 19.4 19.4M19.4 4.6 4.6 19.4"/>
+    <path fill="currentColor" d="M12 3.35L12.95 4.3L12 5.25L11.05 4.3ZM12 6.75L12.95 7.7L12 8.65L11.05 7.7ZM10.3 5.05L11.25 6L10.3 6.95L9.35 6ZM13.7 5.05L14.65 6L13.7 6.95L12.75 6ZM12 15.35L12.95 16.3L12 17.25L11.05 16.3ZM12 18.75L12.95 19.7L12 20.65L11.05 19.7ZM10.3 17.05L11.25 18L10.3 18.95L9.35 18ZM13.7 17.05L14.65 18L13.7 18.95L12.75 18ZM18 9.35L18.95 10.3L18 11.25L17.05 10.3ZM18 12.75L18.95 13.7L18 14.65L17.05 13.7ZM16.3 11.05L17.25 12L16.3 12.95L15.35 12ZM19.7 11.05L20.65 12L19.7 12.95L18.75 12ZM6 9.35L6.95 10.3L6 11.25L5.05 10.3ZM6 12.75L6.95 13.7L6 14.65L5.05 13.7ZM4.3 11.05L5.25 12L4.3 12.95L3.35 12ZM7.7 11.05L8.65 12L7.7 12.95L6.75 12Z"/>
+  </symbol>
   <symbol id="i-chev" viewBox="0 0 24 24">
     <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5L8 12l6.5 6.5"/>
   </symbol>
@@ -32,6 +38,21 @@
     <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
       <rect x="2.5" y="5" width="19" height="14" rx="1.5"/>
       <path d="M3.5 6.5L12 13l8.5-6.5"/>
+    </g>
+  </symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="9" cy="20" r="1.4"/>
+      <circle cx="18" cy="20" r="1.4"/>
+      <path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 1.9-1.4L21 8H6"/>
+    </g>
+  </symbol>
+  <symbol id="i-close" viewBox="0 0 24 24">
+    <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/>
+  </symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/>
     </g>
   </symbol>
   <symbol id="i-fb" viewBox="0 0 24 24">
@@ -83,8 +104,8 @@
 
   <header class="site-header">
     <a class="brand" href="#top" aria-label="S.E. Centers — home">
+      <svg class="brand__emblem" width="28" height="28" aria-hidden="true"><use href="#emblem"/></svg>
       <span class="brand__name">S.E. Centers</span>
-      <svg class="brand__orn" width="34" height="15"><use href="#orn"/></svg>
     </a>
     <nav class="site-nav" aria-label="Primary">
       <a href="#top">The Series</a>
@@ -92,7 +113,13 @@
       <a href="#extras">Extras</a>
       <a href="#reviews">Reviews</a>
     </nav>
-    <a class="btn btn--solid btn--sm" href="#books">Order Now</a>
+    <div class="header-actions">
+      <a class="btn btn--solid btn--sm" href="#books">Order Now</a>
+      <button class="cart-button" type="button" data-cart-open aria-label="Open cart">
+        <svg width="19" height="19" aria-hidden="true"><use href="#i-cart"/></svg>
+        <span class="cart-button__count" data-cart-count>0</span>
+      </button>
+    </div>
   </header>
 
   <section class="hero" aria-label="Featured book">
@@ -144,7 +171,7 @@
       <p class="tagline" data-field="tagline" data-stagger style="--i:3">The light remembers. The future answers.</p>
       <p class="desc" data-field="desc" data-stagger style="--i:4">A long-hidden truth comes to light. As ancient forces awaken, hope becomes the final key to a future worth fighting for.</p>
       <div class="hero__cta" data-stagger style="--i:5">
-        <a class="btn btn--solid" href="#" data-field="order">Order Now</a>
+        <button class="btn btn--solid" type="button" data-hero-order>Order Now</button>
         <a class="btn btn--outline" href="#books">Learn More</a>
       </div>
     </div>
@@ -154,31 +181,46 @@
 <main class="light">
   <section class="series" id="books">
     <h2 class="section-title"><span class="dot">·</span> The Tartarian Chronicles <span class="dot">·</span></h2>
-    <ul class="rail" aria-label="The five books of the series">
-      <li class="rail__book">
+    <ul class="rail" aria-label="The five books of the series" data-books-rail>
+      <li class="rail__book" data-book-id="through">
         <img src="images/opt/through-thumb.jpg" width="340" height="543" loading="lazy" decoding="async"
              alt="Through the Veil — Book 1">
         <span class="rail__caption">Book 1</span>
+        <strong class="rail__title">Through the Veil</strong>
+        <span class="rail__price">$19.99</span>
+        <button class="btn btn--solid btn--sm rail__cart" type="button" data-add-to-cart="through">Add to Cart</button>
       </li>
-      <li class="rail__book">
+      <li class="rail__book" data-book-id="refuge">
         <img src="images/opt/refuge-thumb.jpg" width="340" height="541" loading="lazy" decoding="async"
              alt="The Refuge — Book 2">
         <span class="rail__caption">Book 2</span>
+        <strong class="rail__title">The Refuge</strong>
+        <span class="rail__price">$19.99</span>
+        <button class="btn btn--solid btn--sm rail__cart" type="button" data-add-to-cart="refuge">Add to Cart</button>
       </li>
-      <li class="rail__book">
+      <li class="rail__book" data-book-id="darkness">
         <img src="images/opt/darkness-thumb.jpg" width="340" height="541" loading="lazy" decoding="async"
              alt="Out of Darkness — Book 3">
         <span class="rail__caption">Book 3</span>
+        <strong class="rail__title">Out of Darkness</strong>
+        <span class="rail__price">$19.99</span>
+        <button class="btn btn--solid btn--sm rail__cart" type="button" data-add-to-cart="darkness">Add to Cart</button>
       </li>
-      <li class="rail__book">
+      <li class="rail__book" data-book-id="brotherhood">
         <img src="images/opt/brotherhood-thumb.jpg" width="340" height="541" loading="lazy" decoding="async"
              alt="Brotherhood — Book 4">
         <span class="rail__caption">Book 4</span>
+        <strong class="rail__title">Brotherhood</strong>
+        <span class="rail__price">$19.99</span>
+        <button class="btn btn--solid btn--sm rail__cart" type="button" data-add-to-cart="brotherhood">Add to Cart</button>
       </li>
-      <li class="rail__book">
+      <li class="rail__book" data-book-id="silver">
         <img src="images/opt/silver-thumb.jpg" width="340" height="541" loading="lazy" decoding="async"
              alt="Silver Light — Book 5">
         <span class="rail__caption">Book 5</span>
+        <strong class="rail__title">Silver Light</strong>
+        <span class="rail__price">$19.99</span>
+        <button class="btn btn--solid btn--sm rail__cart" type="button" data-add-to-cart="silver">Add to Cart</button>
       </li>
     </ul>
     <a class="btn btn--outline btn--sm" href="#top">View the Series</a>
@@ -208,10 +250,35 @@
   </section>
 </main>
 
+<div class="cart-backdrop" data-cart-backdrop hidden></div>
+<aside class="cart-panel" data-cart-panel aria-hidden="true" aria-labelledby="cart-title">
+  <div class="cart-panel__head">
+    <div>
+      <p class="cart-panel__eyebrow">Secure Checkout</p>
+      <h2 id="cart-title">Your Cart</h2>
+    </div>
+    <button class="icon-button" type="button" data-cart-close aria-label="Close cart">
+      <svg width="22" height="22" aria-hidden="true"><use href="#i-close"/></svg>
+    </button>
+  </div>
+  <div class="cart-items" data-cart-items></div>
+  <p class="cart-empty" data-cart-empty>Your cart is empty.</p>
+  <div class="cart-summary">
+    <div class="cart-summary__row">
+      <span>Subtotal</span>
+      <strong data-cart-subtotal>$0.00</strong>
+    </div>
+    <p>Shipping and tax, when enabled, are calculated during Stripe Checkout.</p>
+    <button class="btn btn--solid cart-checkout" type="button" data-checkout>Checkout Securely</button>
+  </div>
+</aside>
+
+<div class="toast" data-toast role="status" aria-live="polite"></div>
+
 <footer class="site-footer">
   <div class="site-footer__brand">
+    <svg class="brand__emblem" width="24" height="24" aria-hidden="true"><use href="#emblem"/></svg>
     <span class="brand__name">S.E. Centers</span>
-    <svg width="34" height="15" aria-hidden="true"><use href="#orn"/></svg>
   </div>
   <nav class="site-footer__nav" aria-label="Footer">
     <a href="#top">The Series</a>

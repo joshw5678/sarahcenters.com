@@ -1,2 +1,5 @@
-.DS_Store
+.env
 node_modules/
+data/store.json
+uploads/
+.DS_Store

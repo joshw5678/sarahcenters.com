@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order Receipt — S.E. Centers</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles.css">
+<script src="src/success.js" defer></script>
+</head>
+<body>
+<main class="light receipt-page">
+  <a class="receipt-brand" href="/">S.E. Centers</a>
+  <section class="receipt-card" aria-labelledby="receipt-title">
+    <p class="cart-panel__eyebrow">Order Receipt</p>
+    <h1 id="receipt-title">Thank You</h1>
+    <p class="receipt-lede" data-receipt-message>Loading your order details...</p>
+    <div class="receipt-details" data-receipt-details></div>
+    <div class="receipt-actions">
+      <a class="btn btn--solid" href="/" data-continue>Continue Shopping</a>
+      <a class="btn btn--outline" href="#" data-stripe-receipt hidden>View Stripe Receipt</a>
+    </div>
+  </section>
+</main>
+</body>
+</html>
