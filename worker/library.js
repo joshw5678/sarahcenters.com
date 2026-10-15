@@ -281,6 +281,10 @@ async function claimPurchase(request, env, body) {
        SET user_id = ?, pending_email_normalized = NULL,
            entitlement_status = 'active', updated_at = ?
        WHERE id = ? AND user_id IS NULL
+         AND payment_status = 'paid'
+         AND entitlement_status IN ('pending_claim', 'active')
+         AND refund_status IN ('none', 'partial', 'resolved')
+         AND revoked_at IS NULL
          AND EXISTS (
            SELECT 1 FROM purchase_claim_tokens
            WHERE id = ? AND used_at IS NULL AND expires_at > ?
@@ -295,16 +299,26 @@ async function claimPurchase(request, env, body) {
               'active', ?, NULL, ''
        FROM purchase_items pi
        JOIN purchases p ON p.id = pi.purchase_id
-       WHERE pi.purchase_id = ? AND p.user_id = ?`
+       WHERE pi.purchase_id = ? AND p.user_id = ?
+         AND p.payment_status = 'paid' AND p.entitlement_status = 'active'
+         AND p.refund_status IN ('none', 'partial', 'resolved')
+         AND p.revoked_at IS NULL`
     ).bind(session.userId, now, claim.purchase_id, session.userId),
     env.DB.prepare(
       `UPDATE purchase_claim_tokens
        SET used_at = ?, claimed_by_user_id = ?
-       WHERE id = ? AND used_at IS NULL AND expires_at > ?`
-    ).bind(now, session.userId, claim.id, now),
+       WHERE id = ? AND used_at IS NULL AND expires_at > ?
+         AND EXISTS (
+           SELECT 1 FROM purchases p
+           WHERE p.id = purchase_claim_tokens.purchase_id AND p.user_id = ?
+             AND p.payment_status = 'paid' AND p.entitlement_status = 'active'
+             AND p.refund_status IN ('none', 'partial', 'resolved')
+             AND p.revoked_at IS NULL
+         )`
+    ).bind(now, session.userId, claim.id, now, session.userId),
   ]);
   if (Number(results[0].meta?.changes || 0) !== 1) {
-    const error = new Error("This purchase has already been claimed.");
+    const error = new Error("This purchase is no longer available to claim.");
     error.status = 409;
     error.expose = true;
     throw error;

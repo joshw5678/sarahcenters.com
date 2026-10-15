@@ -638,6 +638,92 @@ describe("checkout and Stripe fulfillment", () => {
 });
 
 describe("private library, downloads, and guest claims", () => {
+  it.each([
+    ["full refund", [["charge.refunded", { amount: 399, amount_refunded: 399 }]], 409],
+    ["open dispute", [["charge.dispute.created", {}]], 409],
+    ["partial refund", [["charge.refunded", { amount: 399, amount_refunded: 100 }]], 200],
+    ["won dispute", [["charge.dispute.created", {}], ["charge.dispute.closed", { status: "won" }]], 200],
+  ])("preserves purchase restrictions when claiming after a %s", async (_label, events, expectedStatus) => {
+    await ensureSeedBooks(env);
+    const user = await insertUser("guest@example.com");
+    const session = await sessionFor(user);
+    const token = "guest-claim-policy-token-that-is-long-enough-12345";
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO purchases
+           (id, pending_email_normalized, stripe_checkout_session_id,
+            stripe_payment_intent_id, stripe_event_id, amount_paid, currency,
+            purchased_at, payment_status, entitlement_status, created_at, updated_at)
+         VALUES ('pur_claim_policy', ?, 'cs_test_claimpolicy12345',
+                 'pi_claim_policy', 'evt_claim_policy', 399, 'usd', ?, 'paid',
+                 'pending_claim', ?, ?)`
+      ).bind(user.email, now, now, now),
+      env.DB.prepare(
+        `INSERT INTO purchase_items
+           (id, purchase_id, book_id, stripe_price_id, quantity, unit_amount,
+            currency, formats_json, created_at)
+         VALUES ('pit_claim_policy', 'pur_claim_policy', 'through', 'price_claim_policy',
+                 1, 399, 'usd', '["epub"]', ?)`
+      ).bind(now),
+      env.DB.prepare(
+        `INSERT INTO purchase_claim_tokens
+           (id, purchase_id, email_normalized, token_hash, created_at, expires_at)
+         VALUES ('pct_claim_policy', 'pur_claim_policy', ?, ?, ?, ?)`
+      ).bind(user.email, await hashToken(token), now, new Date(Date.now() + 60000).toISOString()),
+    ]);
+    for (const [type, object] of events) {
+      await processStripeEvent(new Request(`${ORIGIN}/api/stripe/webhook`), env, {
+        id: `evt_${crypto.randomUUID()}`,
+        type,
+        data: { object: { payment_intent: "pi_claim_policy", ...object } },
+      });
+    }
+    const before = await env.DB.prepare("SELECT * FROM purchases WHERE id = 'pur_claim_policy'")
+      .first();
+    const claimed = await workerRequest("/api/account/claim-purchase", {
+      method: "POST",
+      cookie: session.cookie,
+      csrf: session.csrfToken,
+      body: { token },
+    });
+    expect(claimed.status).toBe(expectedStatus);
+    const after = await env.DB.prepare("SELECT * FROM purchases WHERE id = 'pur_claim_policy'")
+      .first();
+    const claim = await env.DB.prepare(
+      "SELECT used_at, claimed_by_user_id FROM purchase_claim_tokens WHERE id = 'pct_claim_policy'"
+    ).first();
+    const library = await workerRequest("/api/library", { cookie: session.cookie });
+    const books = (await library.json()).books;
+    const grant = await workerRequest("/api/library/through/download", {
+      method: "POST",
+      cookie: session.cookie,
+      csrf: session.csrfToken,
+      body: { format: "epub" },
+    });
+    if (expectedStatus === 409) {
+      expect(after).toEqual(before);
+      expect(claim).toEqual({ used_at: null, claimed_by_user_id: null });
+      expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM entitlements").first())
+        .toEqual({ count: 0 });
+      expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM email_deliveries").first())
+        .toEqual({ count: 0 });
+      expect(books).toHaveLength(0);
+      expect(grant.status).toBe(403);
+    } else {
+      expect(after).toMatchObject({
+        user_id: user.id,
+        payment_status: before.payment_status,
+        refund_status: before.refund_status,
+        entitlement_status: "active",
+      });
+      expect(claim.used_at).toBeTruthy();
+      expect(claim.claimed_by_user_id).toBe(user.id);
+      expect(books.map((book) => book.id)).toEqual(["through"]);
+      expect(grant.status).toBe(200);
+    }
+  });
+
   it("isolates libraries and protects EPUB/PDF downloads with expiring one-use grants", async () => {
     const owner = await insertUser("owner@example.com");
     const stranger = await insertUser("stranger@example.com");
