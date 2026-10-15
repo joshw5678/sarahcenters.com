@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": 1785353785742,
+  "updatedAt": 1792070850658,
   "nodeCount": 6,
   "nodes": {
     "mem-MEMORY-memory-index": {
@@ -20,22 +20,22 @@
     "mem-user-prefers-pnpm-security----": {
       "id": "mem-user-prefers-pnpm-security----",
       "category": "user-prefers-pnpm-security",
-      "confidence": 0.53,
-      "accessCount": 1,
+      "confidence": 0.5,
+      "accessCount": 0,
       "createdAt": 1783473527427
     },
     "mem-tartarian-site-structure----": {
       "id": "mem-tartarian-site-structure----",
       "category": "tartarian-site-structure",
-      "confidence": 0.5,
-      "accessCount": 0,
+      "confidence": 0.53,
+      "accessCount": 1,
       "createdAt": 1783473527450
     },
     "mem-lacantina-website----": {
       "id": "mem-lacantina-website----",
       "category": "lacantina-website",
-      "confidence": 0.5,
-      "accessCount": 0,
+      "confidence": 0.53,
+      "accessCount": 1,
       "createdAt": 1783473527454
     },
     "insight-1783650135413-uw0g": {

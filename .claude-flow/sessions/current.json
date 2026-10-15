@@ -5,10 +5,10 @@
   "context": {
     "lastMatchedPatterns": [
       "mem-MEMORY-memory-index",
-      "mem-tartarian-site-structure----",
-      "mem-lacantina-website----",
-      "mem-MEMORY-memory-index",
-      "mem-hospital-app-toolchain-env----"
+      "insight-1783650135413-uw0g",
+      "mem-user-prefers-pnpm-security----",
+      "mem-hospital-app-toolchain-env----",
+      "mem-MEMORY-memory-index"
     ]
   },
   "metrics": {
@@ -17,6 +17,6 @@
     "tasks": 0,
     "errors": 0
   },
-  "updatedAt": "2026-07-29T19:36:25.853Z",
-  "restoredAt": "2026-07-29T19:36:25.721Z"
+  "updatedAt": "2026-10-15T13:27:31.210Z",
+  "restoredAt": "2026-10-15T13:27:30.629Z"
 }

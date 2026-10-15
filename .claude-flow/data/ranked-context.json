@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "computedAt": 1785353785743,
+  "computedAt": 1792070850661,
   "entries": [
     {
       "id": "mem-MEMORY-memory-index",
@@ -114,9 +114,9 @@
       "content": "name: user-prefers-pnpm-security\ndescription: Josh prefers pnpm over npm for supply-chain security and wants docs written for humans\nmetadata: \n  node_type: memory\n  type: feedback\n  originSessionId: 3d371519-7a57-4949-bb2a-c20ee2437302\n---\n\nJosh asked to move the Hospital-App repo off npm because \"npm has been not so secure in the past\", and to make the README \"more intuitive and understandable for humans\".\n\n**Why:** He values supply-chain security (pnpm 10's blocked install scripts) and plain-",
       "summary": "---",
       "category": "user-prefers-pnpm-security",
-      "confidence": 0.53,
+      "confidence": 0.5,
       "pageRank": 0.16666666666666666,
-      "accessCount": 1,
+      "accessCount": 0,
       "words": [
         "name",
         "user-prefers-pnpm-security",
@@ -200,9 +200,9 @@
       "content": "name: tartarian-site-structure\ndescription: \"Key facts about the Tartarian Chronicles landing site — image mapping, theming system, and pending placeholders\"\nmetadata: \n  node_type: memory\n  type: project\n  originSessionId: a3952e27-7184-47e6-8bf1-450350f685d6\n---\n\nStatic one-page site for \"The Tartarian Chronicles\" (5-book series by S.E. Centers), built 2026-07-06. Entry is `index.html` with `src/styles.css` + `src/main.js`; no build step, serve with `npx http-server -p 4173` (see `.claude/laun",
       "summary": "---",
       "category": "tartarian-site-structure",
-      "confidence": 0.5,
+      "confidence": 0.53,
       "pageRank": 0.16666666666666666,
-      "accessCount": 0,
+      "accessCount": 1,
       "words": [
         "name",
         "tartarian-site-structure",
@@ -291,9 +291,9 @@
       "content": "name: lacantina-website\ndescription: \"La Cantina restaurant website project — build details, brand facts, and outstanding items\"\nmetadata: \n  node_type: memory\n  type: project\n  originSessionId: eeae7bcc-c117-4075-9110-5c5f282a6f9d\n---\n\nBuilding a marketing website for **La Cantina — Tequila Bar & Kitchen**, an authentic Mexican restaurant in Boiling Springs, SC. Started 2026-07-06.\n\n**Deliverable:** single self-contained `index.html` at project root (inline CSS/JS, no build step), one-page anim",
       "summary": "---",
       "category": "lacantina-website",
-      "confidence": 0.5,
+      "confidence": 0.53,
       "pageRank": 0.16666666666666666,
-      "accessCount": 0,
+      "accessCount": 1,
       "words": [
         "name",
         "lacantina-website",
