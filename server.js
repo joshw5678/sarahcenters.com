@@ -24,6 +24,7 @@ const SESSION_SECRET =
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
+const PDF_ADDON_CENTS = 100;
 
 const DEFAULT_BOOKS = [
   {
@@ -32,9 +33,9 @@ const DEFAULT_BOOKS = [
     number: "1",
     title: "Through the Veil",
     tagline: "The hidden past will not stay buried.",
-    desc: "In a world shaped by ancient lines of power and long-buried truths, one young man discovers he is more than he was told. His journey will uncover secrets that could change everything.",
+    desc: "Step into Chris and Tina's shoes as they uncover secrets of their ancestors, discover a hidden realm, face ghosts of the past and confront demons of the present.",
     image: "/images/opt/through-thumb.jpg",
-    priceCents: 1999,
+    priceCents: 399,
     currency: "usd",
     active: true,
   },
@@ -46,7 +47,7 @@ const DEFAULT_BOOKS = [
     tagline: "Some secrets are worth fighting for.",
     desc: "Aric and his allies find shelter in a hidden stronghold, but safety comes at a cost. As old enemies close in and buried truths rise to the surface, the fight for freedom becomes more dangerous than ever.",
     image: "/images/opt/refuge-thumb.jpg",
-    priceCents: 1999,
+    priceCents: 399,
     currency: "usd",
     active: true,
   },
@@ -58,7 +59,7 @@ const DEFAULT_BOOKS = [
     tagline: "Some secrets are meant to stay buried.",
     desc: "As the shadows of the past rise, the truth becomes more dangerous than the lies. He was never meant to lead. Now he must. The fight for freedom begins where the light ends.",
     image: "/images/opt/darkness-thumb.jpg",
-    priceCents: 1999,
+    priceCents: 499,
     currency: "usd",
     active: true,
   },
@@ -70,7 +71,7 @@ const DEFAULT_BOOKS = [
     tagline: "Bonds forged in truth. Loyalties tested by fire.",
     desc: "In a world where ancient power stirs and empires collide, loyalty is the sharpest weapon-and brotherhood is the only thing worth fighting for.",
     image: "/images/opt/brotherhood-thumb.jpg",
-    priceCents: 1999,
+    priceCents: 599,
     currency: "usd",
     active: true,
   },
@@ -82,11 +83,49 @@ const DEFAULT_BOOKS = [
     tagline: "The light remembers. The future answers.",
     desc: "A long-hidden truth comes to light. As ancient forces awaken, hope becomes the final key to a future worth fighting for.",
     image: "/images/opt/silver-thumb.jpg",
-    priceCents: 1999,
+    priceCents: 599,
     currency: "usd",
     active: true,
   },
 ];
+
+// Editable site copy. Keys map to [data-content] / [data-content-placeholder]
+// hooks in index.html; the public /api/content endpoint hydrates them at load.
+const DEFAULT_CONTENT = {
+  "site.title": "S.E. Centers — Author of the Tartarian Chronicles",
+  "site.description":
+    "S.E. Centers, author of the Tartarian Chronicles — ebook editions of an epic saga of buried truths, ancient power, and the fight for freedom.",
+  "brand.name": "S.E. Centers",
+  "nav.books": "Books",
+  "nav.reviews": "Reviews",
+  "nav.login": "Log In",
+  "header.orderNow": "Order Now",
+  "hero.orderNow": "Order Now",
+  "hero.learnMore": "Learn More",
+  "series.title": "The Tartarian Chronicles",
+  "quote.text":
+    "A sweeping, intelligent epic with heart, mystery, and a world you’ll never want to leave.",
+  "quote.attribution": "Early Reader",
+  "newsletter.heading": "Stay in the Know",
+  "newsletter.body":
+    "Get news, exclusive content, and early updates from the world of the Tartarian Chronicles.",
+  "newsletter.placeholder": "Enter your email",
+  "newsletter.button": "Join the Journey",
+  "newsletter.confirm": "Welcome to the journey — you’re on the list.",
+  "cart.eyebrow": "Secure Checkout",
+  "cart.title": "Your Cart",
+  "cart.empty": "Your cart is empty.",
+  "cart.note": "EPUB is included. Add the PDF version for $1 per book before checkout.",
+  "cart.checkout": "Checkout Securely",
+  "footer.series": "The Series",
+  "footer.books": "Books",
+  "footer.extras": "Extras",
+  "footer.reviews": "Reviews",
+  "footer.library": "My Library",
+  "footer.legal": "© 2026 S.E. Centers. All rights reserved.",
+};
+
+const CONTENT_MAX_LENGTH = 2000;
 
 let storeCache = null;
 let initPromise = null;
@@ -109,6 +148,7 @@ function seedStore() {
       createdAt: seededAt,
       updatedAt: seededAt,
     })),
+    content: { ...DEFAULT_CONTENT },
     orders: [],
   };
 }
@@ -137,10 +177,22 @@ async function ensureStore() {
 
       if (!Array.isArray(storeCache.books)) storeCache.books = [];
       if (!Array.isArray(storeCache.orders)) storeCache.orders = [];
+
+      let dirty = false;
       if (storeCache.books.length === 0) {
         storeCache.books = seedStore().books;
-        await saveStore(storeCache);
+        dirty = true;
       }
+      if (!storeCache.content || typeof storeCache.content !== "object") {
+        storeCache.content = {};
+      }
+      for (const [key, value] of Object.entries(DEFAULT_CONTENT)) {
+        if (typeof storeCache.content[key] !== "string") {
+          storeCache.content[key] = value;
+          dirty = true;
+        }
+      }
+      if (dirty) await saveStore(storeCache);
     })();
   }
   return initPromise;
@@ -190,6 +242,17 @@ function publicBook(book) {
     currency: book.currency,
     active: Boolean(book.active),
   };
+}
+
+function publicContent(content) {
+  const merged = {};
+  for (const key of Object.keys(DEFAULT_CONTENT)) {
+    const value = content && typeof content[key] === "string" && content[key].length
+      ? content[key]
+      : DEFAULT_CONTENT[key];
+    merged[key] = value;
+  }
+  return merged;
 }
 
 function publicOrder(order) {
@@ -332,19 +395,6 @@ function absoluteImageUrl(req, imagePath) {
   return new URL(imagePath, `${getOrigin(req)}/`).toString();
 }
 
-function getAllowedShippingCountries() {
-  const countries = String(process.env.SHIPPING_ALLOWED_COUNTRIES || "US")
-    .split(",")
-    .map((country) => country.trim().toUpperCase())
-    .filter(Boolean);
-  return countries.length ? countries : ["US"];
-}
-
-function getShippingCents() {
-  const value = Number(process.env.SHIPPING_RATE_CENTS || 0);
-  return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
-}
-
 function normalizeCheckoutItems(rawItems, books) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     throw new Error("Add at least one book to checkout.");
@@ -355,21 +405,37 @@ function normalizeCheckoutItems(rawItems, books) {
 
   rawItems.forEach((item) => {
     const bookId = String(item.bookId || item.id || "").trim();
+    const includePdf =
+      item.includePdf === true ||
+      item.format === "epub_pdf" ||
+      item.formats === "epub_pdf" ||
+      (Array.isArray(item.formats) && item.formats.includes("pdf"));
     const quantity = Math.max(1, Math.min(99, Math.floor(Number(item.quantity || 1))));
     if (!bookId || !booksById.has(bookId)) throw new Error("One of the selected books is unavailable.");
-    merged.set(bookId, (merged.get(bookId) || 0) + quantity);
+    const key = `${bookId}:${includePdf ? "epub_pdf" : "epub"}`;
+    merged.set(key, {
+      bookId,
+      includePdf,
+      quantity: Math.min(99, (merged.get(key)?.quantity || 0) + quantity),
+    });
   });
 
-  const normalized = [...merged.entries()].map(([bookId, quantity]) => {
-    const book = booksById.get(bookId);
+  const normalized = [...merged.values()].map((entry) => {
+    const book = booksById.get(entry.bookId);
+    const pdfAddonCents = entry.includePdf ? PDF_ADDON_CENTS : 0;
     return {
-      bookId,
+      bookId: entry.bookId,
       title: book.title,
       number: book.number,
       image: book.image,
-      quantity: Math.min(99, quantity),
-      unitAmountCents: book.priceCents,
+      quantity: entry.quantity,
+      unitAmountCents: book.priceCents + pdfAddonCents,
+      basePriceCents: book.priceCents,
+      pdfAddonCents,
       currency: book.currency,
+      format: entry.includePdf ? "epub_pdf" : "epub",
+      formats: entry.includePdf ? ["epub", "pdf"] : ["epub"],
+      formatLabel: entry.includePdf ? "EPUB + PDF" : "EPUB",
     };
   });
 
@@ -416,17 +482,12 @@ async function syncSessionToOrder(sessionOrId) {
     order.receiptUrl = latestCharge?.receipt_url || order.receiptUrl || null;
     order.totalCents = session.amount_total ?? order.totalCents;
     order.subtotalCents = session.amount_subtotal ?? order.subtotalCents;
-    order.shippingCents =
-      session.total_details?.amount_shipping ?? order.shippingCents ?? getShippingCents();
+    order.shippingCents = 0;
     order.customer = {
       name: session.customer_details?.name || order.customer?.name || "",
       email: session.customer_details?.email || order.customer?.email || "",
       phone: session.customer_details?.phone || order.customer?.phone || "",
-      address:
-        session.shipping_details?.address ||
-        session.customer_details?.address ||
-        order.customer?.address ||
-        null,
+      address: session.customer_details?.address || order.customer?.address || null,
     };
     if (paid && !order.paidAt) order.paidAt = nowIso();
     order.updatedAt = nowIso();
@@ -435,7 +496,10 @@ async function syncSessionToOrder(sessionOrId) {
 }
 
 async function handleStripeEvent(event) {
-  if (event.type === "checkout.session.completed") {
+  if (
+    event.type === "checkout.session.completed" ||
+    event.type === "checkout.session.async_payment_succeeded"
+  ) {
     await syncSessionToOrder(event.data.object.id);
   }
 
@@ -455,9 +519,12 @@ async function handleStripeEvent(event) {
     }
   }
 
-  if (event.type === "payment_intent.payment_failed") {
+  if (
+    event.type === "payment_intent.payment_failed" ||
+    event.type === "checkout.session.async_payment_failed"
+  ) {
     const paymentIntent = event.data.object;
-    const orderId = paymentIntent.metadata?.orderId;
+    const orderId = paymentIntent.metadata?.orderId || paymentIntent.client_reference_id;
     if (orderId) {
       await mutateStore((data) => {
         const order = data.orders.find((item) => item.id === orderId);
@@ -528,6 +595,11 @@ app.get("/api/books", async (_req, res) => {
   res.json({ books: sortBooks(data.books).filter((book) => book.active).map(publicBook) });
 });
 
+app.get("/api/content", async (_req, res) => {
+  const data = await readStore();
+  res.json({ content: publicContent(data.content) });
+});
+
 app.post("/api/checkout/session", async (req, res) => {
   if (!stripe) {
     return res.status(503).json({
@@ -544,7 +616,6 @@ app.post("/api/checkout/session", async (req, res) => {
       (sum, item) => sum + item.unitAmountCents * item.quantity,
       0
     );
-    const shippingCents = getShippingCents();
     const createdAt = nowIso();
     const order = {
       id: `ord_${crypto.randomUUID()}`,
@@ -557,8 +628,8 @@ app.post("/api/checkout/session", async (req, res) => {
       customer: { name: "", email: "", phone: "", address: null },
       items,
       subtotalCents,
-      shippingCents,
-      totalCents: subtotalCents + shippingCents,
+      shippingCents: 0,
+      totalCents: subtotalCents,
       currency,
       createdAt,
       updatedAt: createdAt,
@@ -583,9 +654,11 @@ app.post("/api/checkout/session", async (req, res) => {
           currency: item.currency,
           unit_amount: item.unitAmountCents,
           product_data: {
-            name: item.number ? `Book ${item.number}: ${item.title}` : item.title,
+            name: item.number
+              ? `Book ${item.number}: ${item.title} (${item.formatLabel})`
+              : `${item.title} (${item.formatLabel})`,
             images: [absoluteImageUrl(req, item.image)],
-            metadata: { bookId: item.bookId },
+            metadata: { bookId: item.bookId, format: item.format },
           },
         },
       })),
@@ -593,27 +666,14 @@ app.post("/api/checkout/session", async (req, res) => {
       metadata: { orderId: order.id },
       payment_intent_data: { metadata: { orderId: order.id } },
       customer_creation: "always",
-      phone_number_collection: { enabled: true },
-      billing_address_collection: "required",
-      shipping_address_collection: { allowed_countries: getAllowedShippingCountries() },
+      phone_number_collection: { enabled: false },
+      billing_address_collection: "auto",
       success_url: `${origin}/success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/?checkout=cancelled`,
     };
 
     if (process.env.STRIPE_AUTOMATIC_TAX === "true") {
       sessionParams.automatic_tax = { enabled: true };
-    }
-
-    if (shippingCents > 0) {
-      sessionParams.shipping_options = [
-        {
-          shipping_rate_data: {
-            type: "fixed_amount",
-            fixed_amount: { amount: shippingCents, currency },
-            display_name: process.env.SHIPPING_RATE_NAME || "Standard Shipping",
-          },
-        },
-      ];
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);
@@ -700,6 +760,34 @@ app.get("/api/admin/me", requireAdmin, (_req, res) => {
 app.get("/api/admin/books", requireAdmin, async (_req, res) => {
   const data = await readStore();
   res.json({ books: sortBooks(data.books) });
+});
+
+app.get("/api/admin/content", requireAdmin, async (_req, res) => {
+  const data = await readStore();
+  res.json({ content: publicContent(data.content) });
+});
+
+app.patch("/api/admin/content", requireAdmin, async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const updates =
+      body.content && typeof body.content === "object" ? body.content : body;
+
+    const updated = await mutateStore((data) => {
+      if (!data.content || typeof data.content !== "object") data.content = {};
+      for (const key of Object.keys(DEFAULT_CONTENT)) {
+        if (updates[key] === undefined) continue;
+        // Blank a field to reset it back to the built-in default.
+        const value = optionalString(updates[key], CONTENT_MAX_LENGTH);
+        data.content[key] = value || DEFAULT_CONTENT[key];
+      }
+      data.contentUpdatedAt = nowIso();
+      return data.content;
+    });
+    return res.json({ content: publicContent(updated) });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Unable to update site text." });
+  }
 });
 
 app.post("/api/admin/books", requireAdmin, upload.single("cover"), async (req, res) => {
@@ -789,7 +877,7 @@ app.get("/api/admin/orders/:id", requireAdmin, async (req, res) => {
 });
 
 app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
-  const allowed = new Set(["unpaid", "new", "packing", "shipped", "complete", "canceled"]);
+  const allowed = new Set(["unpaid", "new", "delivered", "packing", "shipped", "complete", "canceled"]);
   try {
     const updated = await mutateStore((data) => {
       const order = data.orders.find((item) => item.id === req.params.id);
@@ -819,6 +907,9 @@ app.use("/src", express.static(path.join(ROOT_DIR, "src")));
 app.use("/images", express.static(path.join(ROOT_DIR, "images")));
 app.use("/assets", express.static(path.join(ROOT_DIR, "assets")));
 app.use("/uploads", express.static(UPLOADS_DIR));
+app.get("/favicon.png", (_req, res) => {
+  res.sendFile(path.join(ROOT_DIR, "favicon.png"));
+});
 
 app.get(["/", "/index.html"], (_req, res) => {
   res.sendFile(path.join(ROOT_DIR, "index.html"));

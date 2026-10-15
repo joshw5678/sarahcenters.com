@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Owner Admin — S.E. Centers</title>
 <meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="/favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
@@ -54,6 +55,141 @@
       <div class="admin-list" data-orders-list></div>
     </section>
 
+    <section class="admin-section" aria-labelledby="content-title">
+      <div class="admin-section__head">
+        <div>
+          <p class="cart-panel__eyebrow">Site Copy</p>
+          <h2 id="content-title">Website Text</h2>
+        </div>
+        <div class="admin-actions">
+          <button class="btn btn--outline btn--sm" type="button" data-content-reload>Reload</button>
+        </div>
+      </div>
+      <form class="content-form" data-content-form>
+        <fieldset class="content-group">
+          <legend>Brand &amp; Search</legend>
+          <label>Brand / Author Name
+            <input data-content-field="brand.name" type="text" maxlength="120">
+          </label>
+          <label class="content-wide">Browser Tab Title
+            <input data-content-field="site.title" type="text" maxlength="200">
+          </label>
+          <label class="content-wide">Search / Social Description
+            <textarea data-content-field="site.description" rows="2" maxlength="320"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset class="content-group">
+          <legend>Header &amp; Navigation</legend>
+          <label>Nav Link: Books
+            <input data-content-field="nav.books" type="text" maxlength="40">
+          </label>
+          <label>Nav Link: Reviews
+            <input data-content-field="nav.reviews" type="text" maxlength="40">
+          </label>
+          <label>Nav Link: Log In
+            <input data-content-field="nav.login" type="text" maxlength="40">
+          </label>
+          <label>Header Button
+            <input data-content-field="header.orderNow" type="text" maxlength="40">
+          </label>
+        </fieldset>
+
+        <fieldset class="content-group">
+          <legend>Hero Buttons</legend>
+          <label>Primary Button
+            <input data-content-field="hero.orderNow" type="text" maxlength="40">
+          </label>
+          <label>Secondary Button
+            <input data-content-field="hero.learnMore" type="text" maxlength="40">
+          </label>
+        </fieldset>
+
+        <fieldset class="content-group">
+          <legend>Books Section</legend>
+          <label class="content-wide">Section Heading
+            <input data-content-field="series.title" type="text" maxlength="120">
+          </label>
+        </fieldset>
+
+        <fieldset class="content-group">
+          <legend>Review Quote</legend>
+          <label class="content-wide">Quote
+            <textarea data-content-field="quote.text" rows="2" maxlength="400"></textarea>
+          </label>
+          <label>Attribution
+            <input data-content-field="quote.attribution" type="text" maxlength="80">
+          </label>
+        </fieldset>
+
+        <fieldset class="content-group">
+          <legend>Newsletter</legend>
+          <label>Heading
+            <input data-content-field="newsletter.heading" type="text" maxlength="80">
+          </label>
+          <label>Email Placeholder
+            <input data-content-field="newsletter.placeholder" type="text" maxlength="80">
+          </label>
+          <label class="content-wide">Body
+            <textarea data-content-field="newsletter.body" rows="2" maxlength="300"></textarea>
+          </label>
+          <label>Button
+            <input data-content-field="newsletter.button" type="text" maxlength="40">
+          </label>
+          <label>Success Message
+            <input data-content-field="newsletter.confirm" type="text" maxlength="160">
+          </label>
+        </fieldset>
+
+        <fieldset class="content-group">
+          <legend>Cart &amp; Checkout</legend>
+          <label>Eyebrow
+            <input data-content-field="cart.eyebrow" type="text" maxlength="40">
+          </label>
+          <label>Cart Title
+            <input data-content-field="cart.title" type="text" maxlength="40">
+          </label>
+          <label>Empty Message
+            <input data-content-field="cart.empty" type="text" maxlength="80">
+          </label>
+          <label>Checkout Button
+            <input data-content-field="cart.checkout" type="text" maxlength="40">
+          </label>
+          <label class="content-wide">Format Note
+            <textarea data-content-field="cart.note" rows="2" maxlength="240"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset class="content-group">
+          <legend>Footer</legend>
+          <label>Link: The Series
+            <input data-content-field="footer.series" type="text" maxlength="40">
+          </label>
+          <label>Link: Books
+            <input data-content-field="footer.books" type="text" maxlength="40">
+          </label>
+          <label>Link: Extras
+            <input data-content-field="footer.extras" type="text" maxlength="40">
+          </label>
+          <label>Link: Reviews
+            <input data-content-field="footer.reviews" type="text" maxlength="40">
+          </label>
+          <label>Link: My Library
+            <input data-content-field="footer.library" type="text" maxlength="40">
+          </label>
+          <label class="content-wide">Legal Line
+            <input data-content-field="footer.legal" type="text" maxlength="160">
+          </label>
+        </fieldset>
+
+        <div class="content-form__actions">
+          <button class="btn btn--solid" type="submit">Save Website Text</button>
+          <p class="admin-message" data-content-message role="status"></p>
+        </div>
+        <p class="content-form__hint">Clear a field and save to restore its original wording.</p>
+      </form>
+    </section>
+
     <section class="admin-section" aria-labelledby="upload-title">
       <div class="admin-section__head">
         <div>
@@ -75,8 +211,8 @@
           <input name="number" type="text" maxlength="24" placeholder="6">
         </label>
         <label>
-          Price
-          <input name="price" type="number" min="0.5" step="0.01" value="19.99" required>
+          EPUB Price
+          <input name="price" type="number" min="0.5" step="0.01" value="3.99" required>
         </label>
         <label>
           Currency

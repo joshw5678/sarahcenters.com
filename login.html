@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log In — S.E. Centers</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles.css">
+<script src="src/account.js" defer></script>
+</head>
+<body class="account-shell" data-account-page="login">
+<header class="account-header"><a class="account-brand" href="/">S.E. Centers</a><a href="/create-account.html">Create Account</a></header>
+<main class="account-main">
+  <section class="account-card" aria-labelledby="page-title">
+    <p class="account-eyebrow">Reader Account</p>
+    <h1 id="page-title">Welcome Back</h1>
+    <p class="account-lede">Log in to checkout securely and access your purchased books.</p>
+    <p class="form-status" data-form-status role="status" aria-live="polite" hidden></p>
+    <form class="account-form" data-account-form novalidate>
+      <label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" maxlength="128" required></label>
+      <button class="btn btn--solid" type="submit">Log In</button>
+    </form>
+    <div class="account-links"><a href="/forgot-password.html">Forgot password?</a><span>New reader? <a href="/create-account.html">Create an account</a></span></div>
+  </section>
+</main>
+</body>
+</html>

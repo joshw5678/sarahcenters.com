@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create Account — S.E. Centers</title><meta name="robots" content="noindex"><link rel="icon" href="/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles.css"><script src="src/account.js" defer></script>
+</head>
+<body class="account-shell" data-account-page="register">
+<header class="account-header"><a class="account-brand" href="/">S.E. Centers</a><a href="/login.html">Log In</a></header>
+<main class="account-main"><section class="account-card" aria-labelledby="page-title">
+  <p class="account-eyebrow">Reader Account</p><h1 id="page-title">Create Your Account</h1>
+  <p class="account-lede">Your verified account keeps every purchase together in My Library.</p>
+  <p class="form-status" data-form-status role="status" aria-live="polite" hidden></p>
+  <form class="account-form" data-account-form novalidate>
+    <label>Name <span>(optional)</span><input name="displayName" type="text" autocomplete="name" maxlength="100"></label>
+    <label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+    <label>Password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" aria-describedby="password-help" required></label>
+    <p class="field-help" id="password-help">Use 12–128 characters and at least three types: uppercase, lowercase, number, or symbol.</p>
+    <label>Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+    <button class="btn btn--solid" type="submit">Create Account</button>
+  </form>
+  <div class="account-links"><span>Already registered? <a href="/login.html">Log in</a></span></div>
+</section></main>
+</body></html>

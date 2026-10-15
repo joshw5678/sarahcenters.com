@@ -1,0 +1,24 @@
+{
+  "id": "session-1783473527409",
+  "startedAt": "2026-07-08T01:18:47.409Z",
+  "cwd": "/Users/joshwaters/Documents/Internship/Dan/tartarian_site",
+  "context": {
+    "lastMatchedPatterns": [
+      "mem-tartarian-site-structure----",
+      "mem-MEMORY-memory-index",
+      "mem-user-prefers-pnpm-security----",
+      "mem-MEMORY-memory-index",
+      "mem-lacantina-website----"
+    ]
+  },
+  "metrics": {
+    "edits": 11,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "updatedAt": "2026-07-10T01:00:43.291Z",
+  "restoredAt": "2026-07-10T01:00:43.237Z",
+  "endedAt": "2026-07-10T02:22:15.421Z",
+  "duration": 176608016
+}

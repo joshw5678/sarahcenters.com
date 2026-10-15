@@ -1,0 +1,22 @@
+{
+  "id": "session-1784567727828",
+  "startedAt": "2026-07-20T17:15:27.828Z",
+  "cwd": "/Users/joshwaters/Documents/Internship/Dan/tartarian_site",
+  "context": {
+    "lastMatchedPatterns": [
+      "mem-MEMORY-memory-index",
+      "mem-tartarian-site-structure----",
+      "mem-lacantina-website----",
+      "mem-MEMORY-memory-index",
+      "mem-hospital-app-toolchain-env----"
+    ]
+  },
+  "metrics": {
+    "edits": 4,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "updatedAt": "2026-07-29T19:36:25.853Z",
+  "restoredAt": "2026-07-29T19:36:25.721Z"
+}

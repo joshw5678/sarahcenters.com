@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Library — S.E. Centers</title><meta name="robots" content="noindex"><link rel="icon" href="/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles.css"><script src="src/account.js" defer></script>
+</head><body class="account-shell" data-account-page="library">
+<header class="account-header"><a class="account-brand" href="/">S.E. Centers</a><nav aria-label="Account"><a href="/account.html">Settings</a><button class="link-button" type="button" data-logout>Log Out</button></nav></header>
+<main class="library-main">
+  <div class="library-heading"><p class="account-eyebrow">Reader Account</p><h1>My Library</h1><p>Your purchased editions remain here for lifetime access unless a payment is refunded or access is revoked.</p></div>
+  <p class="form-status library-status" data-form-status role="status" aria-live="polite" hidden></p>
+  <p class="library-loading" data-library-loading>Opening your library...</p>
+  <section class="library-grid" data-library-grid aria-label="Purchased books"></section>
+  <section class="library-empty" data-library-empty hidden><h2>Your library is waiting</h2><p>Purchased books will appear here after Stripe confirms payment.</p><a class="btn btn--solid" href="/#books">Browse the Series</a></section>
+</main></body></html>

@@ -1,0 +1,242 @@
+[
+  {
+    "timestamp": 1783650135420,
+    "nodes": 6,
+    "edges": 0,
+    "pageRankSum": 0.9999999999999999,
+    "confidences": [
+      0.49,
+      0.49,
+      0.49,
+      0.49,
+      0.49,
+      0.5
+    ],
+    "accessCounts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "topPatterns": [
+      {
+        "id": "insight-1783650135413-uw0g",
+        "summary": "Frequently edited: unknown (11x)",
+        "confidence": 0.5,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-MEMORY-memory-index",
+        "summary": "Memory Index",
+        "confidence": 0.49,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-hospital-app-toolchain-env----",
+        "summary": "---",
+        "confidence": 0.49,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-user-prefers-pnpm-security----",
+        "summary": "---",
+        "confidence": 0.49,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-MEMORY-memory-index",
+        "summary": "Memory Index",
+        "confidence": 0.49,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-tartarian-site-structure----",
+        "summary": "---",
+        "confidence": 0.49,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-MEMORY-memory-index",
+        "summary": "Memory Index",
+        "confidence": 0.49,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-lacantina-website----",
+        "summary": "---",
+        "confidence": 0.49,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 1784054570584,
+    "nodes": 6,
+    "edges": 0,
+    "pageRankSum": 0.9999999999999999,
+    "confidences": [
+      0.47,
+      0.47,
+      0.47,
+      0.47,
+      0.53,
+      0.53
+    ],
+    "accessCounts": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      1
+    ],
+    "topPatterns": [
+      {
+        "id": "mem-lacantina-website----",
+        "summary": "---",
+        "confidence": 0.53,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 1
+      },
+      {
+        "id": "insight-1783650135413-uw0g",
+        "summary": "Frequently edited: unknown (11x)",
+        "confidence": 0.53,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 1
+      },
+      {
+        "id": "mem-MEMORY-memory-index",
+        "summary": "Memory Index",
+        "confidence": 0.47,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-hospital-app-toolchain-env----",
+        "summary": "---",
+        "confidence": 0.47,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-user-prefers-pnpm-security----",
+        "summary": "---",
+        "confidence": 0.47,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-MEMORY-memory-index",
+        "summary": "Memory Index",
+        "confidence": 0.47,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-tartarian-site-structure----",
+        "summary": "---",
+        "confidence": 0.47,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-MEMORY-memory-index",
+        "summary": "Memory Index",
+        "confidence": 0.47,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 1784327362440,
+    "nodes": 6,
+    "edges": 0,
+    "pageRankSum": 0.9999999999999999,
+    "confidences": [
+      0.455,
+      0.455,
+      0.53,
+      0.455,
+      0.455,
+      0.46499999999999997
+    ],
+    "accessCounts": [
+      0,
+      0,
+      1,
+      0,
+      0,
+      0
+    ],
+    "topPatterns": [
+      {
+        "id": "mem-user-prefers-pnpm-security----",
+        "summary": "---",
+        "confidence": 0.53,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 1
+      },
+      {
+        "id": "insight-1783650135413-uw0g",
+        "summary": "Frequently edited: unknown (11x)",
+        "confidence": 0.46499999999999997,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-MEMORY-memory-index",
+        "summary": "Memory Index",
+        "confidence": 0.455,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-hospital-app-toolchain-env----",
+        "summary": "---",
+        "confidence": 0.455,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-MEMORY-memory-index",
+        "summary": "Memory Index",
+        "confidence": 0.455,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-tartarian-site-structure----",
+        "summary": "---",
+        "confidence": 0.455,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-MEMORY-memory-index",
+        "summary": "Memory Index",
+        "confidence": 0.455,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      },
+      {
+        "id": "mem-lacantina-website----",
+        "summary": "---",
+        "confidence": 0.455,
+        "pageRank": 0.16666666666666666,
+        "accessCount": 0
+      }
+    ]
+  }
+]

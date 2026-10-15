@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account Settings — S.E. Centers</title><meta name="robots" content="noindex"><link rel="icon" href="/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles.css"><script src="src/account.js" defer></script>
+</head><body class="account-shell" data-account-page="account">
+<header class="account-header"><a class="account-brand" href="/">S.E. Centers</a><nav aria-label="Account"><a href="/library.html">My Library</a><button class="link-button" type="button" data-logout>Log Out</button></nav></header>
+<main class="account-main"><section class="account-card account-card--wide" aria-labelledby="page-title">
+  <p class="account-eyebrow">Reader Account</p><h1 id="page-title">Account Settings</h1>
+  <p class="account-lede">Update your profile, email address, password, and signed-in devices.</p>
+  <p class="form-status" data-form-status role="status" aria-live="polite" hidden></p>
+  <form class="account-form account-form--columns" data-account-form novalidate>
+    <fieldset><legend>Profile</legend>
+      <label>Name <span>(optional)</span><input name="displayName" type="text" autocomplete="name" maxlength="100"></label>
+      <label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+      <p class="verification-badge" data-verification-state>Checking verification...</p>
+    </fieldset>
+    <fieldset><legend>Security</legend>
+      <label>Current password<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128"></label>
+      <label>New password <span>(optional)</span><input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128"></label>
+      <label>Confirm new password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128"></label>
+    </fieldset>
+    <div class="account-form__actions"><button class="btn btn--solid" type="submit">Save Changes</button><button class="btn btn--outline-dark" type="button" data-revoke-sessions>Sign Out Other Devices</button></div>
+  </form>
+</section></main></body></html>

@@ -10,6 +10,9 @@
   const orderFilter = document.querySelector("[data-order-filter]");
   const bookForm = document.querySelector("[data-book-form]");
   const bookMessage = document.querySelector("[data-book-message]");
+  const contentForm = document.querySelector("[data-content-form]");
+  const contentMessage = document.querySelector("[data-content-message]");
+  const contentReload = document.querySelector("[data-content-reload]");
 
   let orders = [];
   let books = [];
@@ -58,6 +61,15 @@
     ]
       .filter(Boolean)
       .join(" ");
+  }
+
+  function itemLabel(item) {
+    const format =
+      item.formatLabel ||
+      (Array.isArray(item.formats) && item.formats.includes("pdf")
+        ? "EPUB + PDF"
+        : "EPUB");
+    return `${item.title} (${format})`;
   }
 
   function setLoggedIn(isLoggedIn) {
@@ -116,8 +128,8 @@
       meta.append(
         field("Customer", order.customer?.name),
         field("Email", order.customer?.email),
-        field("Phone", order.customer?.phone),
-        field("Ship To", addressText(order.customer?.address)),
+        field("Delivery", "Digital ebook"),
+        field("Billing", addressText(order.customer?.address)),
         field("Total", formatMoney(order.totalCents, order.currency)),
         field("Payment", order.paymentStatus)
       );
@@ -126,7 +138,7 @@
       items.className = "order-items";
       order.items.forEach((item) => {
         const li = document.createElement("li");
-        li.textContent = `${item.quantity} x ${item.title} - ${formatMoney(item.unitAmountCents * item.quantity, item.currency)}`;
+        li.textContent = `${item.quantity} x ${itemLabel(item)} - ${formatMoney(item.unitAmountCents * item.quantity, item.currency)}`;
         items.append(li);
       });
 
@@ -137,20 +149,29 @@
           <select data-order-status>
             <option value="unpaid">Unpaid</option>
             <option value="new">New</option>
-            <option value="packing">Packing</option>
-            <option value="shipped">Shipped</option>
+            <option value="delivered">Delivered</option>
             <option value="complete">Complete</option>
             <option value="canceled">Canceled</option>
           </select>
         </label>
-        <label>Tracking
-          <input data-order-tracking type="text" maxlength="160">
+        <label>Delivery Note
+          <input data-order-tracking type="text" maxlength="160" placeholder="EPUB sent by email">
         </label>
         <label class="order-controls__wide">Owner Notes
           <textarea data-order-notes rows="3" maxlength="1200"></textarea>
         </label>
       `;
-      controls.querySelector("[data-order-status]").value = order.fulfillmentStatus || "unpaid";
+      const statusSelect = controls.querySelector("[data-order-status]");
+      if (
+        order.fulfillmentStatus &&
+        ![...statusSelect.options].some((option) => option.value === order.fulfillmentStatus)
+      ) {
+        const legacyOption = document.createElement("option");
+        legacyOption.value = order.fulfillmentStatus;
+        legacyOption.textContent = order.fulfillmentStatus;
+        statusSelect.append(legacyOption);
+      }
+      statusSelect.value = order.fulfillmentStatus || "unpaid";
       controls.querySelector("[data-order-tracking]").value = order.trackingNumber || "";
       controls.querySelector("[data-order-notes]").value = order.ownerNotes || "";
 
@@ -195,7 +216,7 @@
       const title = document.createElement("h3");
       title.textContent = book.title;
       const meta = document.createElement("p");
-      meta.textContent = `${book.number ? `Book ${book.number} - ` : ""}${formatMoney(book.priceCents, book.currency)}`;
+      meta.textContent = `${book.number ? `Book ${book.number} - ` : ""}${formatMoney(book.priceCents, book.currency)} EPUB`;
       body.append(title, meta, badge(book.active ? "active" : "hidden"));
       const button = document.createElement("button");
       button.className = book.active ? "btn btn--outline btn--sm" : "btn btn--solid btn--sm";
@@ -220,6 +241,26 @@
     const data = await api("/api/admin/books");
     books = data.books || [];
     renderBooks();
+  }
+
+  function fillContentForm(content) {
+    if (!contentForm) return;
+    contentForm.querySelectorAll("[data-content-field]").forEach((el) => {
+      const value = content[el.getAttribute("data-content-field")];
+      el.value = typeof value === "string" ? value : "";
+    });
+  }
+
+  async function loadContent() {
+    if (!contentForm) return;
+    const data = await api("/api/admin/content");
+    fillContentForm(data.content || {});
+  }
+
+  function setMessage(el, text, ok) {
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle("admin-message--ok", Boolean(ok) && Boolean(text));
   }
 
   async function saveOrder(orderId) {
@@ -253,7 +294,7 @@
     try {
       await api("/api/admin/me");
       setLoggedIn(true);
-      await Promise.all([loadOrders(), loadBooks()]);
+      await Promise.all([loadOrders(), loadBooks(), loadContent()]);
     } catch {
       setLoggedIn(false);
     }
@@ -270,7 +311,7 @@
       });
       loginForm.reset();
       setLoggedIn(true);
-      await Promise.all([loadOrders(), loadBooks()]);
+      await Promise.all([loadOrders(), loadBooks(), loadContent()]);
     } catch (error) {
       loginMessage.textContent = error.message;
     }
@@ -316,7 +357,7 @@
 
   bookForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    bookMessage.textContent = "";
+    setMessage(bookMessage, "", false);
     const submit = bookForm.querySelector("button[type=submit]");
     submit.disabled = true;
     submit.textContent = "Uploading...";
@@ -329,18 +370,52 @@
         headers: { Accept: "application/json" },
       });
       bookForm.reset();
-      bookForm.elements.price.value = "19.99";
+      bookForm.elements.price.value = "3.99";
       bookForm.elements.currency.value = "usd";
       bookForm.elements.active.checked = true;
-      bookMessage.textContent = "Book uploaded and catalog refreshed.";
+      setMessage(bookMessage, "Book uploaded and catalog refreshed.", true);
       await loadBooks();
     } catch (error) {
-      bookMessage.textContent = error.message;
+      setMessage(bookMessage, error.message, false);
     } finally {
       submit.disabled = false;
       submit.textContent = "Upload Book";
     }
   });
+
+  if (contentForm) {
+    contentForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      setMessage(contentMessage, "", false);
+      const submit = contentForm.querySelector("button[type=submit]");
+      submit.disabled = true;
+      submit.textContent = "Saving...";
+      try {
+        const content = {};
+        contentForm.querySelectorAll("[data-content-field]").forEach((el) => {
+          content[el.getAttribute("data-content-field")] = el.value;
+        });
+        const data = await api("/api/admin/content", {
+          method: "PATCH",
+          body: JSON.stringify({ content }),
+        });
+        fillContentForm(data.content || {});
+        setMessage(contentMessage, "Website text saved. Reload the homepage to see it live.", true);
+      } catch (error) {
+        setMessage(contentMessage, error.message, false);
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Save Website Text";
+      }
+    });
+  }
+
+  if (contentReload) {
+    contentReload.addEventListener("click", () => {
+      setMessage(contentMessage, "", false);
+      loadContent().catch((error) => setMessage(contentMessage, error.message, false));
+    });
+  }
 
   boot();
 })();

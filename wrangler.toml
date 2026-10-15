@@ -1,0 +1,39 @@
+name = "tartarian-chronicles"
+main = "worker/index.js"
+account_id = "c17b904481dcb3a2a15ebbe7ecbc27b1"
+compatibility_date = "2026-07-10"
+compatibility_flags = [ "nodejs_compat" ]
+workers_dev = true
+
+[[routes]]
+pattern = "tartarianchronicles.com"
+custom_domain = true
+
+[[routes]]
+pattern = "www.tartarianchronicles.com"
+custom_domain = true
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tartarian-orders"
+database_id = "3bbeef1f-a582-476c-98a8-cff2d1d02f23"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BOOK_COVERS"
+bucket_name = "tartarian-book-covers"
+
+[[r2_buckets]]
+binding = "BOOK_FILES"
+bucket_name = "tartarian-book-files"
+
+[vars]
+PUBLIC_URL = "https://tartarianchronicles.com"
+STRIPE_AUTOMATIC_TAX = "false"
+EMAIL_PROVIDER = "aws-ses"
+AWS_REGION = "us-east-1"

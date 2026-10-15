@@ -3,15 +3,16 @@
   "use strict";
 
   const ORDER = ["through", "refuge", "darkness", "brotherhood", "silver"];
+  const PDF_ADDON_CENTS = 100;
   const HERO_BOOKS = {
     through: {
       number: "1",
       title: "Through the Veil",
       tagline: "The hidden past will not stay buried.",
-      desc: "In a world shaped by ancient lines of power and long-buried truths, one young man discovers he is more than he was told. His journey will uncover secrets that could change everything.",
+      desc: "Step into Chris and Tina's shoes as they uncover secrets of their ancestors, discover a hidden realm, face ghosts of the past and confront demons of the present.",
       themeColor: "#1b5891",
       image: "images/opt/through-thumb.jpg",
-      priceCents: 1999,
+      priceCents: 399,
       currency: "usd",
     },
     refuge: {
@@ -21,7 +22,7 @@
       desc: "Aric and his allies find shelter in a hidden stronghold, but safety comes at a cost. As old enemies close in and buried truths rise to the surface, the fight for freedom becomes more dangerous than ever.",
       themeColor: "#77090c",
       image: "images/opt/refuge-thumb.jpg",
-      priceCents: 1999,
+      priceCents: 399,
       currency: "usd",
     },
     darkness: {
@@ -31,7 +32,7 @@
       desc: "As the shadows of the past rise, the truth becomes more dangerous than the lies. He was never meant to lead. Now he must. The fight for freedom begins where the light ends.",
       themeColor: "#000000",
       image: "images/opt/darkness-thumb.jpg",
-      priceCents: 1999,
+      priceCents: 499,
       currency: "usd",
     },
     brotherhood: {
@@ -41,7 +42,7 @@
       desc: "In a world where ancient power stirs and empires collide, loyalty is the sharpest weapon-and brotherhood is the only thing worth fighting for.",
       themeColor: "#012257",
       image: "images/opt/brotherhood-thumb.jpg",
-      priceCents: 1999,
+      priceCents: 599,
       currency: "usd",
     },
     silver: {
@@ -51,7 +52,7 @@
       desc: "A long-hidden truth comes to light. As ancient forces awaken, hope becomes the final key to a future worth fighting for.",
       themeColor: "#0284c0",
       image: "images/opt/silver-thumb.jpg",
-      priceCents: 1999,
+      priceCents: 599,
       currency: "usd",
     },
   };
@@ -75,7 +76,9 @@
   const cartSubtotal = document.querySelector("[data-cart-subtotal]");
   const cartCount = document.querySelector("[data-cart-count]");
   const checkoutButton = document.querySelector("[data-checkout]");
+  const cartSummaryNote = document.querySelector(".cart-summary p");
   const toast = document.querySelector("[data-toast]");
+  const accountLink = document.querySelector("[data-account-link]");
 
   let index = Math.max(0, ORDER.indexOf(document.body.dataset.book));
   let swapTimer = 0;
@@ -84,6 +87,10 @@
   let apiCatalogLoaded = false;
   let cart = loadCart();
   let toastTimer = 0;
+  let account = null;
+  let csrfToken = "";
+  let accountPromise = null;
+  let siteContent = {};
 
   function layoutCarousel() {
     carButtons.forEach((btn) => {
@@ -140,6 +147,11 @@
         .map((item) => ({
           bookId: String(item.bookId || ""),
           quantity: Math.max(1, Math.min(99, Math.floor(Number(item.quantity || 1)))),
+          includePdf:
+            item.includePdf === true ||
+            item.format === "epub_pdf" ||
+            item.formats === "epub_pdf" ||
+            (Array.isArray(item.formats) && item.formats.includes("pdf")),
         }))
         .filter((item) => item.bookId);
     } catch {
@@ -166,6 +178,14 @@
     const fromApi = catalog.find((book) => book.id === bookId && book.active !== false);
     if (fromApi) return fromApi;
     return apiCatalogLoaded ? null : FALLBACK_BOOKS.find((book) => book.id === bookId);
+  }
+
+  function itemUnitCents(book, item) {
+    return (Number(book?.priceCents) || 0) + (item?.includePdf ? PDF_ADDON_CENTS : 0);
+  }
+
+  function formatLabel(item) {
+    return item?.includePdf ? "EPUB + PDF" : "EPUB";
   }
 
   function showToast(message) {
@@ -199,7 +219,7 @@
 
     const existing = cart.find((item) => item.bookId === bookId);
     if (existing) existing.quantity = Math.min(99, existing.quantity + quantity);
-    else cart.push({ bookId, quantity });
+    else cart.push({ bookId, quantity, includePdf: false });
     saveCart();
     renderCart();
     openCart();
@@ -220,6 +240,14 @@
 
   function removeFromCart(bookId) {
     cart = cart.filter((item) => item.bookId !== bookId);
+    saveCart();
+    renderCart();
+  }
+
+  function updateCartFormat(bookId, includePdf) {
+    cart = cart.map((item) =>
+      item.bookId === bookId ? { ...item, includePdf: Boolean(includePdf) } : item
+    );
     saveCart();
     renderCart();
   }
@@ -251,7 +279,9 @@
 
       const price = document.createElement("span");
       price.className = "rail__price";
-      price.textContent = formatMoney(book.priceCents, book.currency);
+      price.textContent = `${formatMoney(book.priceCents, book.currency)} ${String(
+        book.currency || "usd"
+      ).toUpperCase()}`;
 
       const button = document.createElement("button");
       button.className = "btn btn--solid btn--sm rail__cart";
@@ -280,7 +310,8 @@
     cart.forEach((item) => {
       const book = findBook(item.bookId);
       if (!book) return;
-      subtotal += book.priceCents * item.quantity;
+      const unitCents = itemUnitCents(book, item);
+      subtotal += unitCents * item.quantity;
       count += item.quantity;
 
       const row = document.createElement("article");
@@ -299,7 +330,17 @@
       title.textContent = book.title;
 
       const meta = document.createElement("p");
-      meta.textContent = formatMoney(book.priceCents, book.currency);
+      meta.textContent = `${formatMoney(unitCents, book.currency)} each - ${formatLabel(item)}`;
+
+      const format = document.createElement("label");
+      format.className = "cart-item__format";
+      const formatInput = document.createElement("input");
+      formatInput.type = "checkbox";
+      formatInput.dataset.cartPdf = item.bookId;
+      formatInput.checked = Boolean(item.includePdf);
+      const formatText = document.createElement("span");
+      formatText.textContent = `Add PDF (+${formatMoney(PDF_ADDON_CENTS, book.currency)})`;
+      format.append(formatInput, formatText);
 
       const controls = document.createElement("div");
       controls.className = "cart-item__controls";
@@ -330,7 +371,7 @@
       remove.innerHTML = '<svg width="18" height="18" aria-hidden="true"><use href="#i-trash"/></svg>';
 
       controls.append(dec, qty, inc, remove);
-      body.append(title, meta, controls);
+      body.append(title, meta, format, controls);
       row.append(img, body);
       cartItems.append(row);
     });
@@ -365,6 +406,17 @@
 
   async function checkout() {
     if (cart.length === 0 || !checkoutButton) return;
+    if (accountPromise) await accountPromise;
+    if (!account) {
+      window.location.assign(`/login.html?return=${encodeURIComponent("/?checkout=resume")}`);
+      return;
+    }
+    if (!account.emailVerified) {
+      window.location.assign(
+        `/verify-email.html?return=${encodeURIComponent("/?checkout=resume")}`
+      );
+      return;
+    }
     const originalText = checkoutButton.textContent;
     checkoutButton.disabled = true;
     checkoutButton.textContent = "Opening Checkout...";
@@ -372,11 +424,27 @@
     try {
       const response = await fetch("/api/checkout/session", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
         body: JSON.stringify({ items: cart }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Checkout could not start.");
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.assign(`/login.html?return=${encodeURIComponent("/?checkout=resume")}`);
+          return;
+        }
+        if (data.code === "EMAIL_VERIFICATION_REQUIRED") {
+          window.location.assign(
+            `/verify-email.html?return=${encodeURIComponent("/?checkout=resume")}`
+          );
+          return;
+        }
+        throw new Error(data.error || "Checkout could not start.");
+      }
       window.location.assign(data.url);
     } catch (error) {
       checkoutButton.disabled = cart.length === 0;
@@ -431,6 +499,11 @@
     if (removeButton) removeFromCart(removeButton.dataset.cartRemove);
   });
 
+  document.addEventListener("change", (event) => {
+    const pdfToggle = event.target.closest("[data-cart-pdf]");
+    if (pdfToggle) updateCartFormat(pdfToggle.dataset.cartPdf, pdfToggle.checked);
+  });
+
   document.querySelectorAll("[data-cart-open]").forEach((button) => {
     button.addEventListener("click", openCart);
   });
@@ -446,8 +519,73 @@
     if (event.key === "Escape") closeCart();
   });
 
+  function updateAccountLink() {
+    if (!accountLink) return;
+    if (account) {
+      accountLink.textContent = "My Library";
+      accountLink.href = "/library.html";
+    } else {
+      accountLink.textContent = siteContent["nav.login"] || "Log In";
+      accountLink.href = "/login.html";
+    }
+  }
+
+  function applySiteContent(content) {
+    siteContent = content || {};
+
+    document.querySelectorAll("[data-content]").forEach((el) => {
+      if (el.hasAttribute("data-account-link")) return; // handled by updateAccountLink
+      const value = siteContent[el.getAttribute("data-content")];
+      if (typeof value === "string" && value.length) el.textContent = value;
+    });
+
+    document.querySelectorAll("[data-content-placeholder]").forEach((el) => {
+      const value = siteContent[el.getAttribute("data-content-placeholder")];
+      if (typeof value === "string" && value.length) el.setAttribute("placeholder", value);
+    });
+
+    if (siteContent["site.title"]) document.title = siteContent["site.title"];
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc && siteContent["site.description"]) {
+      metaDesc.setAttribute("content", siteContent["site.description"]);
+    }
+
+    updateAccountLink();
+  }
+
+  async function hydrateContent() {
+    try {
+      const response = await fetch("/api/content", { headers: { Accept: "application/json" } });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data && data.content) applySiteContent(data.content);
+    } catch {
+      /* keep the HTML defaults */
+    }
+  }
+
   layoutCarousel();
+  hydrateContent();
   hydrateBooks();
+
+  async function hydrateAccount() {
+    try {
+      const response = await fetch("/api/account/me", {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      account = data.user;
+      csrfToken = data.csrfToken;
+    } catch {
+      account = null;
+      csrfToken = "";
+    } finally {
+      updateAccountLink();
+    }
+  }
+  accountPromise = hydrateAccount();
 
   const hydrateBackdrops = () => {
     document.querySelectorAll(".backdrop img[data-src]").forEach((img) => {
@@ -483,12 +621,17 @@
     const confirm = document.createElement("p");
     confirm.className = "newsletter__confirm";
     confirm.setAttribute("role", "status");
-    confirm.textContent = "Welcome to the journey - you're on the list.";
+    confirm.textContent =
+      siteContent["newsletter.confirm"] || "Welcome to the journey - you're on the list.";
     form.replaceWith(confirm);
   });
 
   if (new URLSearchParams(window.location.search).get("checkout") === "cancelled") {
     showToast("Checkout was cancelled. Your cart is still here.");
+    openCart();
+  }
+  if (new URLSearchParams(window.location.search).get("checkout") === "resume") {
+    showToast("You are signed in. Review your cart, then continue to secure checkout.");
     openCart();
   }
 })();

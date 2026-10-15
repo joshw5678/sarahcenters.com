@@ -1,0 +1,107 @@
+[
+  {
+    "id": "mem-MEMORY-memory-index",
+    "key": "memory-index",
+    "content": "- [pnpm + human docs preference](user-prefers-pnpm-security.md) — Josh wants pnpm for supply-chain security and plain-language docs\n- [Toolchain environment](hospital-app-toolchain-env.md) — Node 20 via fnm, brew pnpm 11 broken, repo pins pnpm 10.34.4 + wrangler 4.86.0 until Node 22 upgrade",
+    "summary": "Memory Index",
+    "namespace": "core",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/joshwaters/.claude/projects/-Users-joshwaters-Documents-Internship-Dan-Hospital-App/memory/MEMORY.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1783473527424
+  },
+  {
+    "id": "mem-hospital-app-toolchain-env----",
+    "key": "-",
+    "content": "name: hospital-app-toolchain-env\ndescription: Machine runs Node 20 via fnm; brew pnpm 11 is broken there; repo pins pnpm 10 + wrangler 4.86.0\nmetadata: \n  node_type: memory\n  type: project\n  originSessionId: 3d371519-7a57-4949-bb2a-c20ee2437302\n---\n\nAs of 2026-07-02, Josh's machine runs Node 20.20.2 managed by fnm (fnm bin dir precedes /opt/homebrew/bin in PATH). Homebrew has pnpm 11.5.1 installed, which crashes on Node 20 (needs Node ≥22.13 for node:sqlite). Fix applied: `corepack enable pnpm` ",
+    "summary": "---",
+    "namespace": "hospital-app-toolchain-env",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/joshwaters/.claude/projects/-Users-joshwaters-Documents-Internship-Dan-Hospital-App/memory/hospital-app-toolchain-env.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1783473527425
+  },
+  {
+    "id": "mem-user-prefers-pnpm-security----",
+    "key": "-",
+    "content": "name: user-prefers-pnpm-security\ndescription: Josh prefers pnpm over npm for supply-chain security and wants docs written for humans\nmetadata: \n  node_type: memory\n  type: feedback\n  originSessionId: 3d371519-7a57-4949-bb2a-c20ee2437302\n---\n\nJosh asked to move the Hospital-App repo off npm because \"npm has been not so secure in the past\", and to make the README \"more intuitive and understandable for humans\".\n\n**Why:** He values supply-chain security (pnpm 10's blocked install scripts) and plain-",
+    "summary": "---",
+    "namespace": "user-prefers-pnpm-security",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/joshwaters/.claude/projects/-Users-joshwaters-Documents-Internship-Dan-Hospital-App/memory/user-prefers-pnpm-security.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1783473527427
+  },
+  {
+    "id": "mem-MEMORY-memory-index",
+    "key": "memory-index",
+    "content": "- [Tartarian site structure](tartarian-site-structure.md) — image-to-book mapping, data-book theming system, placeholder links Dan must fill in",
+    "summary": "Memory Index",
+    "namespace": "core",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/joshwaters/.claude/projects/-Users-joshwaters-Documents-Internship-Dan-tartarian-site/memory/MEMORY.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1783473527449
+  },
+  {
+    "id": "mem-tartarian-site-structure----",
+    "key": "-",
+    "content": "name: tartarian-site-structure\ndescription: \"Key facts about the Tartarian Chronicles landing site — image mapping, theming system, and pending placeholders\"\nmetadata: \n  node_type: memory\n  type: project\n  originSessionId: a3952e27-7184-47e6-8bf1-450350f685d6\n---\n\nStatic one-page site for \"The Tartarian Chronicles\" (5-book series by S.E. Centers), built 2026-07-06. Entry is `index.html` with `src/styles.css` + `src/main.js`; no build step, serve with `npx http-server -p 4173` (see `.claude/laun",
+    "summary": "---",
+    "namespace": "tartarian-site-structure",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/joshwaters/.claude/projects/-Users-joshwaters-Documents-Internship-Dan-tartarian-site/memory/tartarian-site-structure.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1783473527450
+  },
+  {
+    "id": "mem-MEMORY-memory-index",
+    "key": "memory-index",
+    "content": "- [La Cantina website](lacantina-website.md) — one-page site for a Mexican restaurant in Boiling Springs SC; brand facts, assets, sample-menu TODO",
+    "summary": "Memory Index",
+    "namespace": "core",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/joshwaters/.claude/projects/-Users-joshwaters-Documents-LaCantina/memory/MEMORY.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1783473527451
+  },
+  {
+    "id": "mem-lacantina-website----",
+    "key": "-",
+    "content": "name: lacantina-website\ndescription: \"La Cantina restaurant website project — build details, brand facts, and outstanding items\"\nmetadata: \n  node_type: memory\n  type: project\n  originSessionId: eeae7bcc-c117-4075-9110-5c5f282a6f9d\n---\n\nBuilding a marketing website for **La Cantina — Tequila Bar & Kitchen**, an authentic Mexican restaurant in Boiling Springs, SC. Started 2026-07-06.\n\n**Deliverable:** single self-contained `index.html` at project root (inline CSS/JS, no build step), one-page anim",
+    "summary": "---",
+    "namespace": "lacantina-website",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/joshwaters/.claude/projects/-Users-joshwaters-Documents-LaCantina/memory/lacantina-website.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1783473527454
+  },
+  {
+    "id": "insight-1783650135413-uw0g",
+    "key": "frequent-edit-unknown",
+    "content": "File unknown was edited 11 times this session — likely a hot path worth monitoring.",
+    "summary": "Frequently edited: unknown (11x)",
+    "namespace": "insights",
+    "type": "procedural",
+    "metadata": {
+      "sourceFile": "unknown",
+      "editCount": 11,
+      "autoGenerated": true
+    },
+    "createdAt": 1783650135413
+  }
+]

@@ -3,25 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Order Receipt — S.E. Centers</title>
+<title>Download Your Books — S.E. Centers</title>
 <meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="/favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="src/styles.css">
 <script src="src/success.js" defer></script>
 </head>
-<body>
-<main class="light receipt-page">
-  <a class="receipt-brand" href="/">S.E. Centers</a>
-  <section class="receipt-card" aria-labelledby="receipt-title">
-    <p class="cart-panel__eyebrow">Order Receipt</p>
-    <h1 id="receipt-title">Thank You</h1>
-    <p class="receipt-lede" data-receipt-message>Loading your order details...</p>
-    <div class="receipt-details" data-receipt-details></div>
+<body class="account-shell">
+<header class="account-header"><a class="account-brand" href="/">S.E. Centers</a><a href="/library.html">My Library</a></header>
+<main class="account-main">
+  <section class="account-card account-card--wide" aria-labelledby="purchase-title">
+    <p class="account-eyebrow">Secure Digital Delivery</p>
+    <h1 id="purchase-title">Download Your Books</h1>
+    <p class="form-status" data-purchase-message role="status" aria-live="polite">Checking the verified payment webhook...</p>
+    <div class="purchase-books" data-purchase-books></div>
     <div class="receipt-actions">
-      <a class="btn btn--solid" href="/" data-continue>Continue Shopping</a>
-      <a class="btn btn--outline" href="#" data-stripe-receipt hidden>View Stripe Receipt</a>
+      <a class="btn btn--solid" href="/library.html" data-library-link hidden>Open My Library</a>
+      <a class="btn btn--outline-dark" href="/">Continue Shopping</a>
     </div>
   </section>
 </main>
