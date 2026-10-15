@@ -462,11 +462,11 @@ async function updateAccount(request, env, readJson) {
     : user.password_hash;
   const now = new Date().toISOString();
   const email = emailChanged ? String(body.email).trim() : user.email;
-  await env.DB.prepare(
-    `UPDATE users SET email = ?, email_normalized = ?, password_hash = ?,
-       display_name = ?, email_verified_at = ?, updated_at = ? WHERE id = ?`
-  )
-    .bind(
+  const statements = [
+    env.DB.prepare(
+      `UPDATE users SET email = ?, email_normalized = ?, password_hash = ?,
+         display_name = ?, email_verified_at = ?, updated_at = ? WHERE id = ?`
+    ).bind(
       email,
       normalized,
       passwordHash,
@@ -474,16 +474,25 @@ async function updateAccount(request, env, readJson) {
       emailChanged ? null : user.email_verified_at,
       now,
       user.id
-    )
-    .run();
-  if (passwordChanged) {
-    await env.DB.prepare(
-      `UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?)
-       WHERE user_id = ? AND id <> ?`
-    )
-      .bind(now, user.id, session.id)
-      .run();
+    ),
+  ];
+  if (emailChanged || passwordChanged) {
+    statements.push(
+      env.DB.prepare(
+        `UPDATE password_reset_tokens SET used_at = ?
+         WHERE user_id = ? AND used_at IS NULL`
+      ).bind(now, user.id)
+    );
   }
+  if (passwordChanged) {
+    statements.push(
+      env.DB.prepare(
+        `UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?)
+         WHERE user_id = ? AND id <> ?`
+      ).bind(now, user.id, session.id)
+    );
+  }
+  await env.DB.batch(statements);
   let emailSent = null;
   if (emailChanged) {
     const result = await issueVerification(request, env, {

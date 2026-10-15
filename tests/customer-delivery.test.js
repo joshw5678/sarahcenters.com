@@ -70,6 +70,25 @@ async function sessionFor(user) {
   return { ...session, cookie: session.cookie.split(";")[0] };
 }
 
+async function resetTokenFor(user) {
+  const token = `reset_${crypto.randomUUID()}`;
+  const now = new Date();
+  await env.DB.prepare(
+    `INSERT INTO password_reset_tokens
+       (id, user_id, token_hash, created_at, expires_at, used_at)
+     VALUES (?, ?, ?, ?, ?, NULL)`
+  )
+    .bind(
+      `prt_${crypto.randomUUID()}`,
+      user.id,
+      await hashToken(token),
+      now.toISOString(),
+      new Date(now.getTime() + 60000).toISOString()
+    )
+    .run();
+  return token;
+}
+
 async function insertPurchase(userId, bookId = "through", formats = ["epub", "pdf"]) {
   await ensureSeedBooks(env);
   const purchaseId = `pur_${crypto.randomUUID()}`;
@@ -343,6 +362,78 @@ describe("customer authentication", () => {
     ).toBe(400);
     const me = await workerRequest("/api/account/me", { cookie: active.cookie });
     expect(me.status).toBe(401);
+  });
+
+  it.each([
+    ["password", { newPassword: "Changed!SecurePass456" }],
+    ["email", { email: "changed-reader@example.com" }],
+    ["password and email", { newPassword: "Changed!SecurePass456", email: "changed-reader@example.com" }],
+  ])("invalidates outstanding reset links after changing %s", async (_label, changes) => {
+    const user = await insertUser("reader@example.com");
+    const session = await sessionFor(user);
+    const otherSession = await sessionFor(user);
+    const oldTokens = [await resetTokenFor(user), await resetTokenFor(user)];
+    const otherUser = await insertUser("other-reader@example.com");
+    const otherToken = await resetTokenFor(otherUser);
+
+    const updated = await workerRequest("/api/account", {
+      method: "PATCH",
+      cookie: session.cookie,
+      csrf: session.csrfToken,
+      body: { currentPassword: GOOD_PASSWORD, ...changes },
+    });
+    expect(updated.status).toBe(200);
+
+    for (const token of oldTokens) {
+      const reset = await workerRequest("/api/account/reset-password", {
+        method: "POST",
+        body: { token, password: "Stale!Password789" },
+      });
+      expect(reset.status).toBe(400);
+    }
+    const login = await workerRequest("/api/account/login", {
+      method: "POST",
+      body: {
+        email: changes.email || user.email,
+        password: changes.newPassword || GOOD_PASSWORD,
+      },
+    });
+    expect(login.status).toBe(200);
+    expect((await workerRequest("/api/account/me", { cookie: session.cookie })).status).toBe(200);
+    expect((await workerRequest("/api/account/me", { cookie: otherSession.cookie })).status)
+      .toBe(changes.newPassword ? 401 : 200);
+
+    const otherReset = await workerRequest("/api/account/reset-password", {
+      method: "POST",
+      body: { token: otherToken, password: "Unrelated!Pass789" },
+    });
+    expect(otherReset.status).toBe(200);
+    const freshReset = await workerRequest("/api/account/reset-password", {
+      method: "POST",
+      body: { token: await resetTokenFor(user), password: "Fresh!SecurePass789" },
+    });
+    expect(freshReset.status).toBe(200);
+  });
+
+  it.each([
+    ["profile update", { displayName: "Updated Reader" }, 200],
+    ["rejected password change", { currentPassword: "incorrect", newPassword: "Changed!SecurePass456" }, 400],
+  ])("preserves reset links after a %s", async (_label, changes, expectedStatus) => {
+    const user = await insertUser("reader@example.com");
+    const session = await sessionFor(user);
+    const token = await resetTokenFor(user);
+    const updated = await workerRequest("/api/account", {
+      method: "PATCH",
+      cookie: session.cookie,
+      csrf: session.csrfToken,
+      body: changes,
+    });
+    expect(updated.status).toBe(expectedStatus);
+    const reset = await workerRequest("/api/account/reset-password", {
+      method: "POST",
+      body: { token, password: "Fresh!SecurePass789" },
+    });
+    expect(reset.status).toBe(200);
   });
 
   it("creates, protects, expires, and revokes sessions on logout", async () => {
