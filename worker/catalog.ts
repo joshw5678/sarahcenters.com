@@ -1,6 +1,9 @@
+import type { Book, SiteContent } from "../shared/contracts.js";
+
+
 // Editable site copy. Keys map to [data-content] / [data-content-placeholder]
 // hooks in index.html; the public /api/content endpoint hydrates them at load.
-export const DEFAULT_CONTENT = {
+export const DEFAULT_CONTENT: SiteContent = {
   "site.title": "S.E. Centers — Author of the Tartarian Chronicles",
   "site.description":
     "S.E. Centers, author of the Tartarian Chronicles — ebook editions of an epic saga of buried truths, ancient power, and the fight for freedom.",
@@ -36,7 +39,7 @@ export const DEFAULT_CONTENT = {
 
 export const CONTENT_MAX_LENGTH = 2000;
 
-export const DEFAULT_BOOKS = [
+export const DEFAULT_BOOKS: Book[] = [
   {
     id: "through",
     slug: "through",

@@ -3,31 +3,46 @@
   "version": "1.0.0",
   "description": "S.E. Centers author site with Stripe checkout, orders, and owner admin.",
   "private": true,
-  "main": "server.js",
+  "main": "server.ts",
   "scripts": {
-    "build": "node scripts/build-assets.js",
+    "build": "npm run typecheck && node --import tsx scripts/build-assets.ts",
     "dev": "npm run build && wrangler dev --local",
-    "dev:node": "node server.js",
+    "dev:node": "npm run build && node --import tsx server.ts",
     "start": "npm run dev",
     "deploy": "npm run build && wrangler deploy",
     "test": "vitest run",
     "db:migrate:local": "wrangler d1 migrations apply tartarian-orders --local",
     "db:migrate:remote": "wrangler d1 migrations apply tartarian-orders --remote",
-    "check": "node --check worker/index.js && node --check worker/auth.js && node --check worker/customer-auth.js && node --check worker/accounts.js && node --check worker/email.js && node --check worker/library.js && node --check worker/catalog.js && node --check worker/db.js && node --check worker/stripe.js && node --check src/main.js && node --check src/account.js && node --check src/success.js && node --check scripts/build-assets.js"
+    "check": "npm run typecheck && npm run lint",
+    "typegen": "wrangler types worker-runtime.d.ts --include-env false",
+    "typecheck": "tsc -p tsconfig.browser.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.node.json",
+    "lint": "eslint src worker shared server.ts scripts tests vitest.config.ts eslint.config.mts",
+    "typegen:check": "wrangler types worker-runtime.d.ts --include-env false --check"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1098.0",
     "dotenv": "^17.2.1",
     "express": "^4.19.2",
     "multer": "^2.0.2",
-    "stripe": "^22.3.1"
+    "stripe": "^22.3.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.18.6",
+    "@types/express": "4.17.25",
+    "@types/multer": "2.3.0",
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.1",
+    "eslint": "10.12.0",
+    "jiti": "2.7.0",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
     "vitest": "^4.1.10",
     "wrangler": "^4.110.0"
   },
   "engines": {
-    "node": ">=22"
-  }
+    "node": "^22.13.0 || >=24.0.0"
+  },
+  "type": "module"
 }

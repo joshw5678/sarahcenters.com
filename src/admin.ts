@@ -1,49 +1,45 @@
+import { scalarText } from "../shared/contracts.js";
+import * as z from "zod";
+import { errorMessage, bookSchema, orderSchema, contentSchema } from "../shared/contracts.js";
+import type { Book, Order, OrderItem, Address, SiteContent } from "../shared/contracts.js";
+import { element, optionalElement, input, requestJson } from "./browser.js";
 (() => {
   "use strict";
 
-  const loginPanel = document.querySelector("[data-login-panel]");
-  const loginForm = document.querySelector("[data-login-form]");
-  const loginMessage = document.querySelector("[data-login-message]");
-  const app = document.querySelector("[data-admin-app]");
-  const ordersList = document.querySelector("[data-orders-list]");
-  const booksList = document.querySelector("[data-books-list]");
-  const orderFilter = document.querySelector("[data-order-filter]");
-  const bookForm = document.querySelector("[data-book-form]");
-  const bookMessage = document.querySelector("[data-book-message]");
-  const contentForm = document.querySelector("[data-content-form]");
-  const contentMessage = document.querySelector("[data-content-message]");
-  const contentReload = document.querySelector("[data-content-reload]");
+  const loginPanel = element("[data-login-panel]", HTMLElement);
+  const loginForm = element("[data-login-form]", HTMLFormElement);
+  const loginMessage = element("[data-login-message]", HTMLElement);
+  const app = element("[data-admin-app]", HTMLElement);
+  const ordersList = element("[data-orders-list]", HTMLElement);
+  const booksList = element("[data-books-list]", HTMLElement);
+  const orderFilter = element("[data-order-filter]", HTMLSelectElement);
+  const bookForm = element("[data-book-form]", HTMLFormElement);
+  const bookMessage = optionalElement("[data-book-message]", HTMLElement);
+  const contentForm = optionalElement("[data-content-form]", HTMLFormElement);
+  const contentMessage = optionalElement("[data-content-message]", HTMLElement);
+  const contentReload = optionalElement("[data-content-reload]", HTMLButtonElement);
 
-  let orders = [];
-  let books = [];
+  let orders: Order[] = [];
+  let books: Book[] = [];
 
-  async function api(path, options = {}) {
-    const response = await fetch(path, {
-      credentials: "same-origin",
-      headers: options.body instanceof FormData ? options.headers : {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...(options.headers || {}),
-      },
-      ...options,
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || "Request failed.");
-    return data;
+  const responseSchema = z.object({ ok: z.boolean().optional(), books: z.array(bookSchema).optional(), book: bookSchema.nullable().optional(), orders: z.array(orderSchema).optional(), order: orderSchema.nullable().optional(), content: contentSchema.optional() });
+  function api(path: string, options: RequestInit = {}) {
+    const headers = new Headers(options.headers);
+    if (!(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
+    return requestJson(path, responseSchema, { ...options, headers });
   }
-
-  function formatMoney(cents, currency = "usd") {
+  function formatMoney(cents: number, currency = "usd") {
     try {
       return new Intl.NumberFormat(undefined, {
         style: "currency",
-        currency: String(currency || "usd").toUpperCase(),
+        currency: scalarText(currency || "usd").toUpperCase(),
       }).format((Number(cents) || 0) / 100);
     } catch {
       return `$${((Number(cents) || 0) / 100).toFixed(2)}`;
     }
   }
 
-  function formatDate(value) {
+  function formatDate(value: string | null | undefined) {
     if (!value) return "-";
     return new Intl.DateTimeFormat(undefined, {
       dateStyle: "medium",
@@ -51,7 +47,7 @@
     }).format(new Date(value));
   }
 
-  function addressText(address) {
+  function addressText(address: Address | null | undefined) {
     if (!address) return "";
     return [
       address.line1,
@@ -63,7 +59,7 @@
       .join(" ");
   }
 
-  function itemLabel(item) {
+  function itemLabel(item: OrderItem) {
     const format =
       item.formatLabel ||
       (Array.isArray(item.formats) && item.formats.includes("pdf")
@@ -72,19 +68,19 @@
     return `${item.title} (${format})`;
   }
 
-  function setLoggedIn(isLoggedIn) {
+  function setLoggedIn(isLoggedIn: boolean) {
     loginPanel.hidden = isLoggedIn;
     app.hidden = !isLoggedIn;
   }
 
-  function badge(text) {
+  function badge(text: string | undefined) {
     const span = document.createElement("span");
-    span.className = `admin-badge admin-badge--${String(text || "unknown").toLowerCase()}`;
+    span.className = `admin-badge admin-badge--${scalarText(text || "unknown").toLowerCase()}`;
     span.textContent = text || "unknown";
     return span;
   }
 
-  function field(labelText, value) {
+  function field(labelText: string, value: string | undefined) {
     const row = document.createElement("p");
     row.className = "admin-field";
     const label = document.createElement("span");
@@ -161,7 +157,7 @@
           <textarea data-order-notes rows="3" maxlength="1200"></textarea>
         </label>
       `;
-      const statusSelect = controls.querySelector("[data-order-status]");
+      const statusSelect = element("[data-order-status]", HTMLSelectElement, controls);
       if (
         order.fulfillmentStatus &&
         ![...statusSelect.options].some((option) => option.value === order.fulfillmentStatus)
@@ -172,8 +168,8 @@
         statusSelect.append(legacyOption);
       }
       statusSelect.value = order.fulfillmentStatus || "unpaid";
-      controls.querySelector("[data-order-tracking]").value = order.trackingNumber || "";
-      controls.querySelector("[data-order-notes]").value = order.ownerNotes || "";
+      element("[data-order-tracking]", HTMLInputElement, controls).value = order.trackingNumber || "";
+      element("[data-order-notes]", HTMLTextAreaElement, controls).value = order.ownerNotes || "";
 
       const footer = document.createElement("div");
       footer.className = "order-card__footer";
@@ -222,7 +218,7 @@
       button.className = book.active ? "btn btn--outline btn--sm" : "btn btn--solid btn--sm";
       button.type = "button";
       button.dataset.toggleBook = book.id;
-      button.dataset.active = String(book.active);
+      button.dataset.active = scalarText(book.active);
       button.textContent = book.active ? "Hide" : "Publish";
       card.append(img, body, button);
       booksList.append(card);
@@ -243,10 +239,11 @@
     renderBooks();
   }
 
-  function fillContentForm(content) {
+  function fillContentForm(content: SiteContent = {}) {
     if (!contentForm) return;
     contentForm.querySelectorAll("[data-content-field]").forEach((el) => {
-      const value = content[el.getAttribute("data-content-field")];
+      if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
+      const value = content[el.getAttribute("data-content-field") || ""];
       el.value = typeof value === "string" ? value : "";
     });
   }
@@ -257,19 +254,19 @@
     fillContentForm(data.content || {});
   }
 
-  function setMessage(el, text, ok) {
+  function setMessage(el: HTMLElement | null, text: string, ok: boolean) {
     if (!el) return;
     el.textContent = text;
     el.classList.toggle("admin-message--ok", Boolean(ok) && Boolean(text));
   }
 
-  async function saveOrder(orderId) {
+  async function saveOrder(orderId: string) {
     const card = ordersList.querySelector(`[data-order-id="${CSS.escape(orderId)}"]`);
     if (!card) return;
     const payload = {
-      fulfillmentStatus: card.querySelector("[data-order-status]").value,
-      trackingNumber: card.querySelector("[data-order-tracking]").value,
-      ownerNotes: card.querySelector("[data-order-notes]").value,
+      fulfillmentStatus: element("[data-order-status]", HTMLSelectElement, card).value,
+      trackingNumber: element("[data-order-tracking]", HTMLInputElement, card).value,
+      ownerNotes: element("[data-order-notes]", HTMLTextAreaElement, card).value,
     };
     await api(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
       method: "PATCH",
@@ -278,7 +275,7 @@
     await loadOrders();
   }
 
-  async function toggleBook(bookId, active) {
+  async function toggleBook(bookId: string, active: boolean) {
     if (active) {
       await api(`/api/admin/books/${encodeURIComponent(bookId)}`, { method: "DELETE" });
     } else {
@@ -313,70 +310,70 @@
       setLoggedIn(true);
       await Promise.all([loadOrders(), loadBooks(), loadContent()]);
     } catch (error) {
-      loginMessage.textContent = error.message;
+      loginMessage.textContent = errorMessage(error);
     }
   });
 
-  document.querySelector("[data-logout]").addEventListener("click", async () => {
+  element("[data-logout]", HTMLButtonElement).addEventListener("click", async () => {
     await api("/api/admin/logout", { method: "POST", body: "{}" }).catch(() => {});
     setLoggedIn(false);
   });
 
-  document.querySelector("[data-refresh-orders]").addEventListener("click", () => {
+  element("[data-refresh-orders]", HTMLButtonElement).addEventListener("click", () => {
     loadOrders().catch((error) => {
-      ordersList.textContent = error.message;
+      ordersList.textContent = errorMessage(error);
     });
   });
   orderFilter.addEventListener("change", () => {
     loadOrders().catch((error) => {
-      ordersList.textContent = error.message;
+      ordersList.textContent = errorMessage(error);
     });
   });
 
   ordersList.addEventListener("click", (event) => {
-    const save = event.target.closest("[data-save-order]");
-    if (!save) return;
+    const save = event.target instanceof Element ? event.target.closest("[data-save-order]") : null;
+    if (!(save instanceof HTMLButtonElement)) return;
     save.disabled = true;
-    saveOrder(save.dataset.saveOrder)
+    saveOrder(save.dataset.saveOrder || "")
       .catch((error) => {
         save.disabled = false;
-        alert(error.message);
+        alert(errorMessage(error));
       });
   });
 
   booksList.addEventListener("click", (event) => {
-    const toggle = event.target.closest("[data-toggle-book]");
-    if (!toggle) return;
+    const toggle = event.target instanceof Element ? event.target.closest("[data-toggle-book]") : null;
+    if (!(toggle instanceof HTMLButtonElement)) return;
     toggle.disabled = true;
-    toggleBook(toggle.dataset.toggleBook, toggle.dataset.active === "true")
+    toggleBook(toggle.dataset.toggleBook || "", toggle.dataset.active === "true")
       .catch((error) => {
         toggle.disabled = false;
-        alert(error.message);
+        alert(errorMessage(error));
       });
   });
 
   bookForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     setMessage(bookMessage, "", false);
-    const submit = bookForm.querySelector("button[type=submit]");
+    const submit = element("button[type=submit]", HTMLButtonElement, bookForm);
     submit.disabled = true;
     submit.textContent = "Uploading...";
     try {
       const formData = new FormData(bookForm);
-      formData.set("active", bookForm.elements.active.checked ? "true" : "false");
+      formData.set("active", input(bookForm, "active").checked ? "true" : "false");
       await api("/api/admin/books", {
         method: "POST",
         body: formData,
         headers: { Accept: "application/json" },
       });
       bookForm.reset();
-      bookForm.elements.price.value = "3.99";
-      bookForm.elements.currency.value = "usd";
-      bookForm.elements.active.checked = true;
+      input(bookForm, "price").value = "3.99";
+      input(bookForm, "currency").value = "usd";
+      input(bookForm, "active").checked = true;
       setMessage(bookMessage, "Book uploaded and catalog refreshed.", true);
       await loadBooks();
     } catch (error) {
-      setMessage(bookMessage, error.message, false);
+      setMessage(bookMessage, errorMessage(error), false);
     } finally {
       submit.disabled = false;
       submit.textContent = "Upload Book";
@@ -387,13 +384,14 @@
     contentForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       setMessage(contentMessage, "", false);
-      const submit = contentForm.querySelector("button[type=submit]");
+      const submit = element("button[type=submit]", HTMLButtonElement, contentForm);
       submit.disabled = true;
       submit.textContent = "Saving...";
       try {
-        const content = {};
+        const content: SiteContent = {};
         contentForm.querySelectorAll("[data-content-field]").forEach((el) => {
-          content[el.getAttribute("data-content-field")] = el.value;
+      if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
+          content[el.getAttribute("data-content-field") || ""] = el.value;
         });
         const data = await api("/api/admin/content", {
           method: "PATCH",
@@ -402,7 +400,7 @@
         fillContentForm(data.content || {});
         setMessage(contentMessage, "Website text saved. Reload the homepage to see it live.", true);
       } catch (error) {
-        setMessage(contentMessage, error.message, false);
+        setMessage(contentMessage, errorMessage(error), false);
       } finally {
         submit.disabled = false;
         submit.textContent = "Save Website Text";
@@ -413,9 +411,9 @@
   if (contentReload) {
     contentReload.addEventListener("click", () => {
       setMessage(contentMessage, "", false);
-      loadContent().catch((error) => setMessage(contentMessage, error.message, false));
+      loadContent().catch((error) => setMessage(contentMessage, errorMessage(error), false));
     });
   }
 
-  boot();
+  void boot();
 })();

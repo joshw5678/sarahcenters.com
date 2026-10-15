@@ -1,10 +1,15 @@
+import { scalarText } from "../shared/contracts.js";
+import { AppError, errorMessage, isRecord, parseJson, cartItemSchema, booksResponseSchema, accountResponseSchema, contentResponseSchema, checkoutResponseSchema } from "../shared/contracts.js";
+import type { Book, CartItem, AccountUser, SiteContent } from "../shared/contracts.js";
+import { element, optionalElement, requestJson } from "./browser.js";
+interface HeroBook { number: string; title: string; tagline: string; desc: string; themeColor: string; image: string; priceCents: number; currency: string }
 /* Tartarian Chronicles - carousel showcase, cart, and checkout */
 (() => {
   "use strict";
 
   const ORDER = ["through", "refuge", "darkness", "brotherhood", "silver"];
   const PDF_ADDON_CENTS = 100;
-  const HERO_BOOKS = {
+  const HERO_BOOKS: Record<string, HeroBook> = {
     through: {
       number: "1",
       title: "Through the Veil",
@@ -56,68 +61,68 @@
       currency: "usd",
     },
   };
-  const FALLBACK_BOOKS = ORDER.map((id) => ({ id, slug: id, active: true, ...HERO_BOOKS[id] }));
+  function heroBook(slug: string): HeroBook { const book = HERO_BOOKS[slug]; if (!book) throw new Error("Unknown featured book."); return book; }
+  const FALLBACK_BOOKS: Book[] = ORDER.map((id) => ({ id, slug: id, active: true, ...heroBook(id) }));
   const CART_KEY = "tc_cart";
 
-  const copy = document.querySelector(".hero__copy");
-  const stage = document.querySelector(".carousel__stage");
-  const scenes = {};
+  const copy = element(".hero__copy", HTMLElement);
+  const stage = element(".carousel__stage", HTMLElement);
+  const scenes: Record<string, HTMLElement> = {};
   document.querySelectorAll(".backdrop .scene").forEach((el) => {
-    scenes[el.dataset.scene] = el;
+    if (el instanceof HTMLElement && el.dataset.scene) scenes[el.dataset.scene] = el;
   });
-  const themeMeta = document.querySelector('meta[name="theme-color"]');
-  const carButtons = [...document.querySelectorAll("[data-car-book]")];
+  const themeMeta = optionalElement('meta[name="theme-color"]', HTMLMetaElement);
+  const carButtons = [...document.querySelectorAll("[data-car-book]")].filter((button): button is HTMLButtonElement => button instanceof HTMLButtonElement);
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const rail = document.querySelector("[data-books-rail]");
-  const cartPanel = document.querySelector("[data-cart-panel]");
-  const cartBackdrop = document.querySelector("[data-cart-backdrop]");
-  const cartItems = document.querySelector("[data-cart-items]");
-  const cartEmpty = document.querySelector("[data-cart-empty]");
-  const cartSubtotal = document.querySelector("[data-cart-subtotal]");
-  const cartCount = document.querySelector("[data-cart-count]");
-  const checkoutButton = document.querySelector("[data-checkout]");
-  const cartSummaryNote = document.querySelector(".cart-summary p");
-  const toast = document.querySelector("[data-toast]");
-  const accountLink = document.querySelector("[data-account-link]");
+  const rail = optionalElement("[data-books-rail]", HTMLElement);
+  const cartPanel = optionalElement("[data-cart-panel]", HTMLElement);
+  const cartBackdrop = optionalElement("[data-cart-backdrop]", HTMLElement);
+  const cartItems = optionalElement("[data-cart-items]", HTMLElement);
+  const cartEmpty = optionalElement("[data-cart-empty]", HTMLElement);
+  const cartSubtotal = optionalElement("[data-cart-subtotal]", HTMLElement);
+  const cartCount = optionalElement("[data-cart-count]", HTMLElement);
+  const checkoutButton = optionalElement("[data-checkout]", HTMLButtonElement);
+  const toast = optionalElement("[data-toast]", HTMLElement);
+  const accountLink = optionalElement("[data-account-link]", HTMLAnchorElement);
 
-  let index = Math.max(0, ORDER.indexOf(document.body.dataset.book));
+  let index = Math.max(0, ORDER.indexOf(document.body.dataset.book || "silver"));
   let swapTimer = 0;
   let enterTimer = 0;
-  let catalog = [...FALLBACK_BOOKS];
+  let catalog: Book[] = [...FALLBACK_BOOKS];
   let apiCatalogLoaded = false;
   let cart = loadCart();
   let toastTimer = 0;
-  let account = null;
+  let account: AccountUser | null = null;
   let csrfToken = "";
-  let accountPromise = null;
-  let siteContent = {};
+  let accountPromise: Promise<void> | null = null;
+  let siteContent: SiteContent = {};
 
   function layoutCarousel() {
     carButtons.forEach((btn) => {
-      const i = ORDER.indexOf(btn.dataset.carBook);
+      const i = ORDER.indexOf(btn.dataset.carBook || "");
       let off = (((i - index) % 5) + 5) % 5;
       if (off > 2) off -= 5;
-      btn.dataset.pos = off;
-      btn.setAttribute("aria-pressed", String(off === 0));
+      btn.dataset.pos = scalarText(off);
+      btn.setAttribute("aria-pressed", scalarText(off === 0));
     });
   }
 
-  function applyContent(slug) {
-    const book = HERO_BOOKS[slug];
-    ["number", "title", "tagline", "desc"].forEach((field) => {
+  function applyContent(slug: string) {
+    const book = heroBook(slug);
+    (["number", "title", "tagline", "desc"] as const).forEach((field) => {
       const el = copy.querySelector(`[data-field="${field}"]`);
       if (el) el.textContent = book[field];
     });
   }
 
-  function switchBook(slug) {
-    if (slug === ORDER[index] || !HERO_BOOKS[slug]) return;
+  function switchBook(slug: string | undefined) {
+    if (!slug || slug === ORDER[index] || !HERO_BOOKS[slug]) return;
     index = ORDER.indexOf(slug);
 
     document.body.dataset.book = slug;
-    if (themeMeta) themeMeta.content = HERO_BOOKS[slug].themeColor;
+    if (themeMeta) themeMeta.content = heroBook(slug).themeColor;
     Object.values(scenes).forEach((scene) => scene.classList.remove("is-active"));
-    if (scenes[slug]) scenes[slug].classList.add("is-active");
+    scenes[slug]?.classList.add("is-active");
     layoutCarousel();
 
     if (reduceMotion.matches) {
@@ -137,58 +142,55 @@
     }, 330);
   }
 
-  const step = (dir) => switchBook(ORDER[(index + dir + 5) % 5]);
+  const step = (dir: number) => switchBook(ORDER[(index + dir + 5) % 5]);
 
-  function loadCart() {
+  function loadCart(): CartItem[] {
     try {
-      const parsed = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
+      const parsed: unknown = parseJson(localStorage.getItem(CART_KEY) || "[]");
       if (!Array.isArray(parsed)) return [];
-      return parsed
-        .map((item) => ({
-          bookId: String(item.bookId || ""),
+      const entries: unknown[] = parsed;
+      return entries.flatMap((item): CartItem[] => {
+        if (!isRecord(item)) return [];
+        const result = cartItemSchema.safeParse({
+          bookId: scalarText(item.bookId || ""),
           quantity: Math.max(1, Math.min(99, Math.floor(Number(item.quantity || 1)))),
-          includePdf:
-            item.includePdf === true ||
-            item.format === "epub_pdf" ||
-            item.formats === "epub_pdf" ||
-            (Array.isArray(item.formats) && item.formats.includes("pdf")),
-        }))
-        .filter((item) => item.bookId);
-    } catch {
-      return [];
-    }
+          includePdf: item.includePdf === true || item.format === "epub_pdf" || item.formats === "epub_pdf" || (Array.isArray(item.formats) && item.formats.includes("pdf")),
+        });
+        return result.success && result.data.bookId ? [result.data] : [];
+      });
+    } catch { return []; }
   }
 
   function saveCart() {
     localStorage.setItem(CART_KEY, JSON.stringify(cart));
   }
 
-  function formatMoney(cents, currency = "usd") {
+  function formatMoney(cents: number, currency = "usd") {
     try {
       return new Intl.NumberFormat(undefined, {
         style: "currency",
-        currency: String(currency || "usd").toUpperCase(),
+        currency: scalarText(currency || "usd").toUpperCase(),
       }).format((Number(cents) || 0) / 100);
     } catch {
       return `$${((Number(cents) || 0) / 100).toFixed(2)}`;
     }
   }
 
-  function findBook(bookId) {
+  function findBook(bookId: string) {
     const fromApi = catalog.find((book) => book.id === bookId && book.active !== false);
     if (fromApi) return fromApi;
     return apiCatalogLoaded ? null : FALLBACK_BOOKS.find((book) => book.id === bookId);
   }
 
-  function itemUnitCents(book, item) {
+  function itemUnitCents(book: Book | undefined | null, item: CartItem) {
     return (Number(book?.priceCents) || 0) + (item?.includePdf ? PDF_ADDON_CENTS : 0);
   }
 
-  function formatLabel(item) {
+  function formatLabel(item: CartItem) {
     return item?.includePdf ? "EPUB + PDF" : "EPUB";
   }
 
-  function showToast(message) {
+  function showToast(message: string) {
     if (!toast) return;
     clearTimeout(toastTimer);
     toast.textContent = message;
@@ -210,8 +212,8 @@
     cartPanel.setAttribute("aria-hidden", "true");
   }
 
-  function addToCart(bookId, quantity = 1) {
-    const book = findBook(bookId);
+  function addToCart(bookId: string | undefined, quantity = 1) {
+    const book = bookId ? findBook(bookId) : null;
     if (!book) {
       showToast("That book is not available right now.");
       return;
@@ -219,14 +221,14 @@
 
     const existing = cart.find((item) => item.bookId === bookId);
     if (existing) existing.quantity = Math.min(99, existing.quantity + quantity);
-    else cart.push({ bookId, quantity, includePdf: false });
+    else cart.push({ bookId: book.id, quantity, includePdf: false });
     saveCart();
     renderCart();
     openCart();
     showToast(`${book.title} added to cart.`);
   }
 
-  function updateCartQuantity(bookId, quantity) {
+  function updateCartQuantity(bookId: string, quantity: number) {
     cart = cart
       .map((item) =>
         item.bookId === bookId
@@ -238,13 +240,13 @@
     renderCart();
   }
 
-  function removeFromCart(bookId) {
+  function removeFromCart(bookId: string) {
     cart = cart.filter((item) => item.bookId !== bookId);
     saveCart();
     renderCart();
   }
 
-  function updateCartFormat(bookId, includePdf) {
+  function updateCartFormat(bookId: string, includePdf: boolean) {
     cart = cart.map((item) =>
       item.bookId === bookId ? { ...item, includePdf: Boolean(includePdf) } : item
     );
@@ -252,7 +254,7 @@
     renderCart();
   }
 
-  function renderBookRail(books) {
+  function renderBookRail(books: Book[]) {
     if (!rail) return;
     rail.replaceChildren();
 
@@ -279,7 +281,7 @@
 
       const price = document.createElement("span");
       price.className = "rail__price";
-      price.textContent = `${formatMoney(book.priceCents, book.currency)} ${String(
+      price.textContent = `${formatMoney(book.priceCents, book.currency)} ${scalarText(
         book.currency || "usd"
       ).toUpperCase()}`;
 
@@ -354,7 +356,7 @@
 
       const qty = document.createElement("span");
       qty.className = "cart-item__qty";
-      qty.textContent = String(item.quantity);
+      qty.textContent = scalarText(item.quantity);
 
       const inc = document.createElement("button");
       inc.className = "cart-qty";
@@ -378,8 +380,8 @@
 
     cartEmpty.hidden = cart.length > 0;
     checkoutButton.disabled = cart.length === 0;
-    cartSubtotal.textContent = formatMoney(subtotal, cart[0] ? findBook(cart[0].bookId)?.currency : "usd");
-    cartCount.textContent = String(count);
+    cartSubtotal.textContent = formatMoney(subtotal, cart[0] ? findBook(cart[0]?.bookId || "")?.currency : "usd");
+    cartCount.textContent = scalarText(count);
     cartCount.hidden = count === 0;
   }
 
@@ -392,7 +394,7 @@
         headers: { Accept: "application/json" },
       });
       if (!response.ok) throw new Error("Unable to load books.");
-      const data = await response.json();
+      const data = booksResponseSchema.parse(await response.json());
       if (Array.isArray(data.books) && data.books.length > 0) {
         catalog = data.books;
         apiCatalogLoaded = true;
@@ -422,44 +424,33 @@
     checkoutButton.textContent = "Opening Checkout...";
 
     try {
-      const response = await fetch("/api/checkout/session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          "X-CSRF-Token": csrfToken,
-        },
+      const data = await requestJson("/api/checkout/session", checkoutResponseSchema, {
+        method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
         body: JSON.stringify({ items: cart }),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 401) {
-          window.location.assign(`/login.html?return=${encodeURIComponent("/?checkout=resume")}`);
-          return;
-        }
-        if (data.code === "EMAIL_VERIFICATION_REQUIRED") {
-          window.location.assign(
-            `/verify-email.html?return=${encodeURIComponent("/?checkout=resume")}`
-          );
-          return;
-        }
-        throw new Error(data.error || "Checkout could not start.");
-      }
       window.location.assign(data.url);
     } catch (error) {
+      if (error instanceof AppError && error.status === 401) {
+        window.location.assign(`/login.html?return=${encodeURIComponent("/?checkout=resume")}`);
+        return;
+      }
+      if (error instanceof AppError && error.code === "EMAIL_VERIFICATION_REQUIRED") {
+        window.location.assign(`/verify-email.html?return=${encodeURIComponent("/?checkout=resume")}`);
+        return;
+      }
       checkoutButton.disabled = cart.length === 0;
       checkoutButton.textContent = originalText;
-      showToast(error.message || "Checkout could not start.");
+      showToast(errorMessage(error, "Checkout could not start."));
     }
   }
 
   carButtons.forEach((btn) =>
     btn.addEventListener("click", () => switchBook(btn.dataset.carBook))
   );
-  document.querySelector(".car-nav--prev").addEventListener("click", () => step(-1));
-  document.querySelector(".car-nav--next").addEventListener("click", () => step(1));
+  element(".car-nav--prev", HTMLButtonElement).addEventListener("click", () => step(-1));
+  element(".car-nav--next", HTMLButtonElement).addEventListener("click", () => step(1));
 
-  document.querySelector(".carousel").addEventListener("keydown", (event) => {
+  element(".carousel", HTMLElement).addEventListener("keydown", (event) => {
     if (event.key === "ArrowLeft") {
       event.preventDefault();
       step(-1);
@@ -470,7 +461,7 @@
     }
   });
 
-  let touchX = null;
+  let touchX: number | null = null;
   stage.addEventListener("pointerdown", (event) => {
     touchX = event.clientX;
   });
@@ -482,10 +473,11 @@
   });
 
   document.addEventListener("click", (event) => {
-    const addButton = event.target.closest("[data-add-to-cart]");
-    const incButton = event.target.closest("[data-cart-inc]");
-    const decButton = event.target.closest("[data-cart-dec]");
-    const removeButton = event.target.closest("[data-cart-remove]");
+    if (!(event.target instanceof Element)) return;
+    const addButton = event.target.closest<HTMLButtonElement>("button[data-add-to-cart]");
+    const incButton = event.target.closest<HTMLButtonElement>("button[data-cart-inc]");
+    const decButton = event.target.closest<HTMLButtonElement>("button[data-cart-dec]");
+    const removeButton = event.target.closest<HTMLButtonElement>("button[data-cart-remove]");
 
     if (addButton) addToCart(addButton.dataset.addToCart);
     if (incButton) {
@@ -496,12 +488,13 @@
       const item = cart.find((entry) => entry.bookId === decButton.dataset.cartDec);
       if (item) updateCartQuantity(item.bookId, item.quantity - 1);
     }
-    if (removeButton) removeFromCart(removeButton.dataset.cartRemove);
+    if (removeButton) removeFromCart(removeButton.dataset.cartRemove || "");
   });
 
   document.addEventListener("change", (event) => {
-    const pdfToggle = event.target.closest("[data-cart-pdf]");
-    if (pdfToggle) updateCartFormat(pdfToggle.dataset.cartPdf, pdfToggle.checked);
+    if (!(event.target instanceof Element)) return;
+    const pdfToggle = event.target.closest<HTMLInputElement>("input[data-cart-pdf]");
+    if (pdfToggle) updateCartFormat(pdfToggle.dataset.cartPdf || "", pdfToggle.checked);
   });
 
   document.querySelectorAll("[data-cart-open]").forEach((button) => {
@@ -512,7 +505,7 @@
   });
   if (cartBackdrop) cartBackdrop.addEventListener("click", closeCart);
   if (checkoutButton) checkoutButton.addEventListener("click", checkout);
-  document.querySelector("[data-hero-order]").addEventListener("click", () => {
+  element("[data-hero-order]", HTMLButtonElement).addEventListener("click", () => {
     addToCart(ORDER[index]);
   });
   document.addEventListener("keydown", (event) => {
@@ -530,17 +523,17 @@
     }
   }
 
-  function applySiteContent(content) {
+  function applySiteContent(content: SiteContent) {
     siteContent = content || {};
 
     document.querySelectorAll("[data-content]").forEach((el) => {
       if (el.hasAttribute("data-account-link")) return; // handled by updateAccountLink
-      const value = siteContent[el.getAttribute("data-content")];
+      const value = siteContent[el.getAttribute("data-content") || ""];
       if (typeof value === "string" && value.length) el.textContent = value;
     });
 
     document.querySelectorAll("[data-content-placeholder]").forEach((el) => {
-      const value = siteContent[el.getAttribute("data-content-placeholder")];
+      const value = siteContent[el.getAttribute("data-content-placeholder") || ""];
       if (typeof value === "string" && value.length) el.setAttribute("placeholder", value);
     });
 
@@ -557,7 +550,7 @@
     try {
       const response = await fetch("/api/content", { headers: { Accept: "application/json" } });
       if (!response.ok) return;
-      const data = await response.json();
+      const data = contentResponseSchema.parse(await response.json());
       if (data && data.content) applySiteContent(data.content);
     } catch {
       /* keep the HTML defaults */
@@ -565,8 +558,8 @@
   }
 
   layoutCarousel();
-  hydrateContent();
-  hydrateBooks();
+  void hydrateContent();
+  void hydrateBooks();
 
   async function hydrateAccount() {
     try {
@@ -575,7 +568,7 @@
         headers: { Accept: "application/json" },
       });
       if (!response.ok) return;
-      const data = await response.json();
+      const data = accountResponseSchema.parse(await response.json());
       account = data.user;
       csrfToken = data.csrfToken;
     } catch {
@@ -589,6 +582,7 @@
 
   const hydrateBackdrops = () => {
     document.querySelectorAll(".backdrop img[data-src]").forEach((img) => {
+      if (!(img instanceof HTMLImageElement) || !img.dataset.src) return;
       img.src = img.dataset.src;
       img.removeAttribute("data-src");
     });
@@ -607,13 +601,14 @@
     setTimeout(kick, 1800);
   });
   document.querySelectorAll(".car-book img, .backdrop img").forEach((img) => {
+    if (!(img instanceof HTMLImageElement)) return;
     if (!img.complete) img.addEventListener("load", () => requestAnimationFrame(kick), { once: true });
   });
 
-  const form = document.querySelector(".newsletter__form");
+  const form = element(".newsletter__form", HTMLFormElement);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const email = form.querySelector("input[type=email]");
+    const email = element("input[type=email]", HTMLInputElement, form);
     if (!email.checkValidity()) {
       email.reportValidity();
       return;

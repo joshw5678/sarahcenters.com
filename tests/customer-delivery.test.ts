@@ -1,3 +1,30 @@
+import Stripe from "stripe";
+import * as z from "zod";
+import { accountResponseSchema, messageResponseSchema, libraryResponseSchema, downloadResponseSchema, parseFormats } from "../shared/contracts.js";
+import type { EmailMessage, StripeGateway, StripeSession, UserRow, PurchaseRow } from "../worker/types.js";
+import type { CountRow } from "../worker/rows.js";
+
+function required<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error("Expected test fixture to exist.");
+  return value;
+}
+async function json<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
+  const value: unknown = await response.json();
+  return schema.parse(value);
+}
+function mockStripe(sessions: Partial<StripeGateway["checkout"]["sessions"]>): StripeGateway {
+  const unexpected = async (): Promise<never> => { throw new Error("Unexpected Stripe call."); };
+  return { prices: { retrieve: unexpected }, checkout: { sessions: { create: unexpected, retrieve: unexpected, ...sessions } }, webhooks: new Stripe("sk_test_dummy").webhooks };
+}
+function dynamicLines(params: Stripe.Checkout.SessionCreateParams, prefix = "price_dynamic") {
+  return required(params.line_items).map((line, index) => {
+    const data = required(line.price_data);
+    const product = required(data.product_data);
+    return { price: { id: `${prefix}_${index}`, unit_amount: required(data.unit_amount), currency: data.currency, product: { metadata: z.record(z.string(), z.string()).parse(product.metadata) } } };
+  });
+}
+interface RequestOptions { method?: string; body?: unknown; cookie?: string; csrf?: string; headers?: Record<string, string> }
+interface TestUser { id: string; email: string; password: string }
 import { env, exports as workerExports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { handleAccountRequest } from "../worker/accounts.js";
@@ -9,7 +36,7 @@ import {
   validatePassword,
   verifyPassword,
 } from "../worker/customer-auth.js";
-import { ensureSeedBooks, findOrderById } from "../worker/db.js";
+import { ensureSeedBooks, findOrderById, listBooks } from "../worker/db.js";
 import { createAwsSesInput } from "../worker/email.js";
 import {
   createCheckout,
@@ -20,7 +47,7 @@ import {
 const ORIGIN = "https://example.com";
 const GOOD_PASSWORD = "Strong!Pass234";
 
-async function workerRequest(path, { method = "GET", body, cookie, csrf, headers = {} } = {}) {
+async function workerRequest(path: string, { method = "GET", body, cookie, csrf, headers = {} }: RequestOptions = {}) {
   const requestHeaders = new Headers({ Accept: "application/json", ...headers });
   if (body !== undefined) requestHeaders.set("Content-Type", "application/json");
   if (method !== "GET" && method !== "HEAD") requestHeaders.set("Origin", ORIGIN);
@@ -30,17 +57,14 @@ async function workerRequest(path, { method = "GET", body, cookie, csrf, headers
     new Request(`${ORIGIN}${path}`, {
       method,
       headers: requestHeaders,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    }),
-    env
+      body: body === undefined ? null : JSON.stringify(body),
+    })
   );
 }
 
-function cookieFrom(response) {
-  return String(response.headers.get("set-cookie") || "").split(";")[0];
-}
 
-async function insertUser(email, { verified = true, password = GOOD_PASSWORD } = {}) {
+
+async function insertUser(email: string, { verified = true, password = GOOD_PASSWORD } = {}) {
   const id = `usr_${crypto.randomUUID()}`;
   const now = new Date().toISOString();
   await env.DB.prepare(
@@ -62,15 +86,15 @@ async function insertUser(email, { verified = true, password = GOOD_PASSWORD } =
   return { id, email, password };
 }
 
-async function sessionFor(user) {
+async function sessionFor(user: TestUser) {
   const request = new Request(`${ORIGIN}/login.html`, {
     headers: { "User-Agent": "Vitest", "CF-Connecting-IP": "192.0.2.1" },
   });
   const session = await createCustomerSession(request, env, user.id);
-  return { ...session, cookie: session.cookie.split(";")[0] };
+  return { ...session, cookie: session.cookie.split(";")[0] ?? "" };
 }
 
-async function resetTokenFor(user) {
+async function resetTokenFor(user: TestUser) {
   const token = `reset_${crypto.randomUUID()}`;
   const now = new Date();
   await env.DB.prepare(
@@ -89,7 +113,7 @@ async function resetTokenFor(user) {
   return token;
 }
 
-async function insertPurchase(userId, bookId = "through", formats = ["epub", "pdf"]) {
+async function insertPurchase(userId: string, bookId = "through", formats = ["epub", "pdf"]) {
   await ensureSeedBooks(env);
   const purchaseId = `pur_${crypto.randomUUID()}`;
   const now = new Date().toISOString();
@@ -137,6 +161,18 @@ async function insertPurchase(userId, bookId = "through", formats = ["epub", "pd
 }
 
 describe("customer authentication", () => {
+  it.each([
+    ["null body", null],
+    ["array body", []],
+    ["object email", { email: { value: "reader@example.com" }, password: GOOD_PASSWORD }],
+    ["object password", { email: "reader@example.com", password: { value: GOOD_PASSWORD } }],
+  ])("rejects malformed registration data: %s", async (_label, body) => {
+    const response = await workerRequest("/api/account/register", { method: "POST", body });
+    expect(response.status).toBe(400);
+    const count = required(await env.DB.prepare("SELECT COUNT(*) AS count FROM users").first<CountRow>());
+    expect(count.count).toBe(0);
+  });
+
   it("hashes passwords with PBKDF2 and enforces strong passwords", async () => {
     const encoded = await hashPassword(GOOD_PASSWORD, 1000);
     expect(encoded).toMatch(/^pbkdf2-sha256\$1000\$/);
@@ -154,9 +190,9 @@ describe("customer authentication", () => {
       body: { email: "Reader@Example.com", password: GOOD_PASSWORD, displayName: "Reader" },
     });
     expect(first.status).toBe(201);
-    const stored = await env.DB.prepare("SELECT * FROM users WHERE email_normalized = ?")
+    const stored = required(await env.DB.prepare("SELECT * FROM users WHERE email_normalized = ?")
       .bind("reader@example.com")
-      .first();
+      .first<UserRow>());
     expect(stored).toBeTruthy();
     expect(stored.password_hash).not.toContain(GOOD_PASSWORD);
 
@@ -165,7 +201,7 @@ describe("customer authentication", () => {
       body: { email: "reader@example.com", password: GOOD_PASSWORD, displayName: "Other" },
     });
     expect(duplicate.status).toBe(202);
-    const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM users").first();
+    const count = required(await env.DB.prepare("SELECT COUNT(*) AS count FROM users").first<CountRow>());
     expect(Number(count.count)).toBe(1);
 
     const invalid = await workerRequest("/api/account/login", {
@@ -173,11 +209,11 @@ describe("customer authentication", () => {
       body: { email: "unknown@example.com", password: GOOD_PASSWORD },
     });
     expect(invalid.status).toBe(401);
-    expect((await invalid.json()).error).toBe("Invalid email or password.");
+    expect((await json(invalid, z.object({ error: z.string() }))).error).toBe("Invalid email or password.");
   });
 
   it("delivers an account-confirmation email and completes the verification flow", async () => {
-    const sent = [];
+    const sent: Array<EmailMessage & { dedupeKey: string }> = [];
     const request = new Request(`${ORIGIN}/api/account/register`, {
       method: "POST",
       headers: {
@@ -191,7 +227,7 @@ describe("customer authentication", () => {
         displayName: "Confirmed Reader",
       }),
     });
-    const response = await handleAccountRequest(
+    const response = required(await handleAccountRequest(
       request,
       {
         ...env,
@@ -204,14 +240,14 @@ describe("customer authentication", () => {
       },
       new URL(request.url),
       (incoming) => incoming.json()
-    );
+    ));
     expect(response.status).toBe(201);
-    expect((await response.json()).emailSent).toBe(true);
+    expect((await json(response, messageResponseSchema)).emailSent).toBe(true);
     expect(sent).toHaveLength(1);
-    expect(sent[0].subject).toMatch(/verify/i);
+    expect(required(sent[0]).subject).toMatch(/verify/i);
 
-    const verificationUrl = sent[0].text.match(/https:\/\/\S+/)?.[0];
-    const token = new URL(verificationUrl).hash.replace(/^#token=/, "");
+    const verificationUrl = required(sent[0]).text.match(/https:\/\/\S+/)?.[0];
+    const token = new URL(required(verificationUrl)).hash.replace(/^#token=/, "");
     const verified = await workerRequest("/api/account/verify-email", {
       method: "POST",
       body: { token: decodeURIComponent(token) },
@@ -223,7 +259,7 @@ describe("customer authentication", () => {
       body: { email: "confirm@example.com", password: GOOD_PASSWORD },
     });
     expect(login.status).toBe(200);
-    expect((await login.json()).user.emailVerified).toBe(true);
+    expect((await json(login, accountResponseSchema)).user.emailVerified).toBe(true);
   });
 
   it("maps transactional messages to the AWS SES v2 format", () => {
@@ -299,9 +335,9 @@ describe("customer authentication", () => {
       body: { token: rawToken },
     });
     expect(verified.status).toBe(200);
-    const row = await env.DB.prepare("SELECT email_verified_at FROM users WHERE id = ?")
+    const row = required(await env.DB.prepare("SELECT email_verified_at FROM users WHERE id = ?")
       .bind(user.id)
-      .first();
+      .first<Pick<UserRow, "email_verified_at">>());
     expect(row.email_verified_at).toBeTruthy();
     const reused = await workerRequest("/api/account/verify-email", {
       method: "POST",
@@ -364,7 +400,7 @@ describe("customer authentication", () => {
     expect(me.status).toBe(401);
   });
 
-  it.each([
+  it.each<[string, { newPassword?: string; email?: string }]>([
     ["password", { newPassword: "Changed!SecurePass456" }],
     ["email", { email: "changed-reader@example.com" }],
     ["password and email", { newPassword: "Changed!SecurePass456", email: "changed-reader@example.com" }],
@@ -441,7 +477,7 @@ describe("customer authentication", () => {
     const expiredSession = await sessionFor(user);
     const me = await workerRequest("/api/account/me", { cookie: expiredSession.cookie });
     expect(me.status).toBe(200);
-    expect((await me.json()).user.email).toBe(user.email);
+    expect((await json(me, accountResponseSchema)).user.email).toBe(user.email);
     await env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE id = ?")
       .bind(new Date(Date.now() - 1000).toISOString(), expiredSession.id)
       .run();
@@ -461,47 +497,19 @@ describe("customer authentication", () => {
 describe("checkout and Stripe fulfillment", () => {
   it("uses server catalog pricing and rejects browser-controlled price fields", async () => {
     await ensureSeedBooks(env);
-    const books = (await env.DB.prepare("SELECT * FROM books").all()).results.map((row) => ({
-      id: row.id,
-      active: Boolean(row.active),
-      title: row.title,
-      number: row.number,
-      image: row.image_url,
-      priceCents: row.price_cents,
-      currency: row.currency,
-      stripeEpubPriceId: row.stripe_epub_price_id,
-      stripeEpubPdfPriceId: row.stripe_epub_pdf_price_id,
-    }));
+    const books = await listBooks(env);
     expect(() =>
       normalizeCheckoutItems([{ bookId: "through", quantity: 1, price: 1 }], books)
     ).toThrow(/unsupported/i);
 
     const user = await insertUser("buyer@example.com");
-    let captured;
-    const stripe = {
-      prices: { retrieve: async () => null },
-      checkout: {
-        sessions: {
-          create: async (params) => {
-            captured = params;
-            return {
-              id: "cs_test_checkoutcreation123",
-              url: "https://checkout.stripe.test/session",
-              line_items: {
-                data: params.line_items.map((line, index) => ({
-                  price: {
-                    id: `price_dynamic_${index}`,
-                    unit_amount: line.price_data.unit_amount,
-                    currency: line.price_data.currency,
-                    product: { metadata: line.price_data.product_data.metadata },
-                  },
-                })),
-              },
-            };
-          },
-        },
+    let captured: Stripe.Checkout.SessionCreateParams | undefined;
+    const stripe = mockStripe({
+      create: async (params) => {
+        captured = params;
+        return { id: "cs_test_checkoutcreation123", url: "https://checkout.stripe.test/session", line_items: { data: dynamicLines(params) } };
       },
-    };
+    });
     const result = await createCheckout(
       new Request(`${ORIGIN}/api/checkout/session`),
       { ...env, STRIPE_CLIENT: stripe },
@@ -509,9 +517,9 @@ describe("checkout and Stripe fulfillment", () => {
       { userId: user.id, email: user.email, displayName: "Buyer" }
     );
     expect(result.url).toContain("checkout.stripe.test");
-    expect(captured.line_items[0].price_data.unit_amount).toBe(499);
-    expect(captured.metadata.userId).toBe(user.id);
-    expect(captured.success_url).toContain("#session_id=");
+    expect(required(required(required(captured).line_items)[0]).price_data?.unit_amount).toBe(499);
+    expect(required(captured).metadata?.userId).toBe(user.id);
+    expect(required(captured).success_url).toContain("#session_id=");
   });
 
   it("rejects invalid webhook signatures", async () => {
@@ -525,32 +533,16 @@ describe("checkout and Stripe fulfillment", () => {
 
   it("creates one purchase, entitlement, and confirmation record idempotently", async () => {
     const user = await insertUser("paid@example.com");
-    let checkoutParams;
-    const createdSession = {
-      id: "cs_test_paidcheckout12345",
-      url: "https://checkout.stripe.test/paid",
-      line_items: { data: [] },
-    };
-    const stripe = {
-      prices: { retrieve: async () => null },
-      checkout: {
-        sessions: {
-          create: async (params) => {
-            checkoutParams = params;
-            createdSession.line_items.data = params.line_items.map((line) => ({
-              price: {
-                id: "price_paid_dynamic",
-                unit_amount: line.price_data.unit_amount,
-                currency: line.price_data.currency,
-                product: { metadata: line.price_data.product_data.metadata },
-              },
-            }));
-            return createdSession;
-          },
-          retrieve: async () => paidSession,
-        },
+    let checkoutParams: Stripe.Checkout.SessionCreateParams | undefined;
+    const createdSession: StripeSession = { id: "cs_test_paidcheckout12345", url: "https://checkout.stripe.test/paid", line_items: { data: [] } };
+    const stripe = mockStripe({
+      create: async (params) => {
+        checkoutParams = params;
+        createdSession.line_items = { data: dynamicLines(params, "price_paid_dynamic") };
+        return createdSession;
       },
-    };
+      retrieve: async () => paidSession,
+    });
     const testEnv = { ...env, STRIPE_CLIENT: stripe };
     const checkout = await createCheckout(
       new Request(`${ORIGIN}/api/checkout/session`),
@@ -558,12 +550,12 @@ describe("checkout and Stripe fulfillment", () => {
       [{ bookId: "through", quantity: 1, includePdf: true }],
       { userId: user.id, email: user.email, displayName: "Paid Reader" }
     );
-    const order = await findOrderById(env, checkout.orderId);
-    const paidSession = {
+    const order = required(await findOrderById(env, checkout.orderId));
+    const paidSession: StripeSession = {
       id: createdSession.id,
       payment_status: "paid",
       status: "complete",
-      metadata: checkoutParams.metadata,
+      metadata: z.record(z.string(), z.string()).parse(required(checkoutParams).metadata),
       client_reference_id: order.id,
       amount_subtotal: 499,
       amount_total: 499,
@@ -579,7 +571,7 @@ describe("checkout and Stripe fulfillment", () => {
           {
             quantity: 1,
             price: {
-              id: "price_paid_dynamic",
+              id: "price_paid_dynamic_0",
               unit_amount: 499,
               currency: "usd",
               product: { metadata: { bookId: "through", format: "epub_pdf" } },
@@ -596,26 +588,26 @@ describe("checkout and Stripe fulfillment", () => {
     const request = new Request(`${ORIGIN}/api/stripe/webhook`);
     await processStripeEvent(request, testEnv, event);
     await processStripeEvent(request, testEnv, event);
-    const purchase = await env.DB.prepare(
+    const purchase = required(await env.DB.prepare(
       "SELECT id FROM purchases WHERE stripe_checkout_session_id = ?"
-    ).bind(paidSession.id).first();
+    ).bind(paidSession.id).first<{ id: string }>());
     const counts = await Promise.all([
-      env.DB.prepare("SELECT COUNT(*) AS count FROM purchases WHERE id = ?").bind(purchase.id).first(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM purchase_items WHERE purchase_id = ?").bind(purchase.id).first(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM entitlements WHERE purchase_id = ?").bind(purchase.id).first(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM email_deliveries WHERE purchase_id = ?").bind(purchase.id).first(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM purchases WHERE id = ?").bind(purchase.id).first<CountRow>(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM purchase_items WHERE purchase_id = ?").bind(purchase.id).first<CountRow>(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM entitlements WHERE purchase_id = ?").bind(purchase.id).first<CountRow>(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM email_deliveries WHERE purchase_id = ?").bind(purchase.id).first<CountRow>(),
     ]);
-    expect(counts.map((row) => Number(row.count))).toEqual([1, 1, 1, 1]);
-    const entitlement = await env.DB.prepare("SELECT formats_json FROM entitlements").first();
-    expect(JSON.parse(entitlement.formats_json)).toEqual(["epub", "pdf"]);
+    expect(counts.map((row) => Number(required(row).count))).toEqual([1, 1, 1, 1]);
+    const entitlement = required(await env.DB.prepare("SELECT formats_json FROM entitlements").first<{ formats_json: string }>());
+    expect(parseFormats(entitlement.formats_json)).toEqual(["epub", "pdf"]);
   });
 
   it("revokes access after a full refund and preserves purchase history", async () => {
     const user = await insertUser("refund@example.com");
     const purchaseId = await insertPurchase(user.id);
-    const purchase = await env.DB.prepare("SELECT * FROM purchases WHERE id = ?")
+    const purchase = required(await env.DB.prepare("SELECT * FROM purchases WHERE id = ?")
       .bind(purchaseId)
-      .first();
+      .first<PurchaseRow>());
     await processStripeEvent(new Request(`${ORIGIN}/api/stripe/webhook`), env, {
       id: "evt_refund",
       type: "charge.refunded",
@@ -627,9 +619,9 @@ describe("checkout and Stripe fulfillment", () => {
         },
       },
     });
-    const updated = await env.DB.prepare("SELECT * FROM purchases WHERE id = ?")
+    const updated = required(await env.DB.prepare("SELECT * FROM purchases WHERE id = ?")
       .bind(purchaseId)
-      .first();
+      .first<PurchaseRow>());
     expect(updated.refund_status).toBe("full");
     expect(updated.entitlement_status).toBe("revoked");
     expect(await env.DB.prepare("SELECT * FROM entitlements WHERE purchase_id = ?").bind(purchaseId).first())
@@ -638,7 +630,7 @@ describe("checkout and Stripe fulfillment", () => {
 });
 
 describe("private library, downloads, and guest claims", () => {
-  it.each([
+  it.each<[string, Array<[string, Record<string, unknown>]>, number]>([
     ["full refund", [["charge.refunded", { amount: 399, amount_refunded: 399 }]], 409],
     ["open dispute", [["charge.dispute.created", {}]], 409],
     ["partial refund", [["charge.refunded", { amount: 399, amount_refunded: 100 }]], 200],
@@ -679,8 +671,8 @@ describe("private library, downloads, and guest claims", () => {
         data: { object: { payment_intent: "pi_claim_policy", ...object } },
       });
     }
-    const before = await env.DB.prepare("SELECT * FROM purchases WHERE id = 'pur_claim_policy'")
-      .first();
+    const before = required(await env.DB.prepare("SELECT * FROM purchases WHERE id = 'pur_claim_policy'")
+      .first<PurchaseRow>());
     const claimed = await workerRequest("/api/account/claim-purchase", {
       method: "POST",
       cookie: session.cookie,
@@ -688,13 +680,13 @@ describe("private library, downloads, and guest claims", () => {
       body: { token },
     });
     expect(claimed.status).toBe(expectedStatus);
-    const after = await env.DB.prepare("SELECT * FROM purchases WHERE id = 'pur_claim_policy'")
-      .first();
-    const claim = await env.DB.prepare(
+    const after = required(await env.DB.prepare("SELECT * FROM purchases WHERE id = 'pur_claim_policy'")
+      .first<PurchaseRow>());
+    const claim = required(await env.DB.prepare(
       "SELECT used_at, claimed_by_user_id FROM purchase_claim_tokens WHERE id = 'pct_claim_policy'"
-    ).first();
+    ).first<Record<string, unknown>>());
     const library = await workerRequest("/api/library", { cookie: session.cookie });
-    const books = (await library.json()).books;
+    const books = (await json(library, libraryResponseSchema)).books;
     const grant = await workerRequest("/api/library/through/download", {
       method: "POST",
       cookie: session.cookie,
@@ -736,9 +728,9 @@ describe("private library, downloads, and guest claims", () => {
     expect((await workerRequest("/api/library")).status).toBe(401);
     const library = await workerRequest("/api/library", { cookie: ownerSession.cookie });
     expect(library.status).toBe(200);
-    expect((await library.json()).books).toHaveLength(1);
+    expect((await json(library, libraryResponseSchema)).books).toHaveLength(1);
     const isolated = await workerRequest("/api/library", { cookie: strangerSession.cookie });
-    expect((await isolated.json()).books).toHaveLength(0);
+    expect((await json(isolated, libraryResponseSchema)).books).toHaveLength(0);
 
     const arbitrary = await workerRequest("/api/library/through/download", {
       method: "POST",
@@ -766,7 +758,7 @@ describe("private library, downloads, and guest claims", () => {
         body: { format },
       });
       expect(grantResponse.status).toBe(200);
-      const grant = await grantResponse.json();
+      const grant = await json(grantResponse, downloadResponseSchema);
       const download = await workerRequest(grant.url, { cookie: ownerSession.cookie });
       expect(download.status).toBe(200);
       expect(download.headers.get("content-type")).toBe(contentType);
@@ -780,7 +772,7 @@ describe("private library, downloads, and guest claims", () => {
       csrf: ownerSession.csrfToken,
       body: { format: "epub" },
     });
-    const expired = await expiredResponse.json();
+    const expired = await json(expiredResponse, downloadResponseSchema);
     await env.DB.prepare("UPDATE download_grants SET expires_at = ? WHERE used_at IS NULL")
       .bind(new Date(Date.now() - 1000).toISOString())
       .run();
@@ -793,7 +785,7 @@ describe("private library, downloads, and guest claims", () => {
       csrf: ownerSession.csrfToken,
       body: { format: "epub" },
     });
-    const missing = await missingResponse.json();
+    const missing = await json(missingResponse, downloadResponseSchema);
     expect((await workerRequest(missing.url, { cookie: ownerSession.cookie })).status).toBe(404);
   });
 
@@ -850,9 +842,9 @@ describe("private library, downloads, and guest claims", () => {
       body: { token: rawToken },
     });
     expect(claimed.status).toBe(200);
-    const purchase = await env.DB.prepare("SELECT * FROM purchases WHERE id = ?")
+    const purchase = required(await env.DB.prepare("SELECT * FROM purchases WHERE id = ?")
       .bind(purchaseId)
-      .first();
+      .first<PurchaseRow>());
     expect(purchase.user_id).toBe(user.id);
     expect(await env.DB.prepare("SELECT * FROM entitlements WHERE purchase_id = ?").bind(purchaseId).first())
       .toBeTruthy();

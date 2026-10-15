@@ -1,8 +1,16 @@
+import { scalarText } from "../shared/contracts.js";
+import type { SendEmailCommandInput } from "@aws-sdk/client-sesv2";
+import type { EmailMessage, EmailRecipient } from "./types.js";
+import type { DeliveryRow } from "./rows.js";
+interface SendEmailOptions extends EmailMessage { dedupeKey: string; category: string; userId?: string | null; purchaseId?: string | null }
+type EmailConfig = Pick<WorkerEnv, "EMAIL_FROM" | "EMAIL_REPLY_TO" | "AWS_SES_CONFIGURATION_SET">;
+import { AppError, errorMessage, isRecord, parseJson as parseUnknownJson } from "../shared/contracts.js";
+import type { WorkerEnv } from "./types.js";
 import { SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
 import { normalizeEmail } from "./customer-auth.js";
 
-function escapeHtml(value) {
-  return String(value ?? "")
+function escapeHtml(value: unknown) {
+  return scalarText(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -10,15 +18,15 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function publicOrigin(request, env) {
+function publicOrigin(request: Request, env: WorkerEnv) {
   const requestUrl = new URL(request.url);
   if (["localhost", "127.0.0.1", "::1"].includes(requestUrl.hostname)) {
     return requestUrl.origin;
   }
-  return String(env.PUBLIC_URL || requestUrl.origin).replace(/\/$/, "");
+  return scalarText(env.PUBLIC_URL || requestUrl.origin).replace(/\/$/, "");
 }
 
-function emailShell(title, introduction, actionLabel, actionUrl, footer = "") {
+function emailShell(title: string, introduction: string, actionLabel: string, actionUrl: string, footer = "") {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
 <body style="margin:0;background:#f3f0e8;color:#1a2433;font-family:Arial,sans-serif">
@@ -36,8 +44,9 @@ function emailShell(title, introduction, actionLabel, actionUrl, footer = "") {
 </body></html>`;
 }
 
-export function createAwsSesInput(env, message) {
-  const input = {
+export function createAwsSesInput(env: EmailConfig, message: EmailMessage): SendEmailCommandInput {
+  if (!env.EMAIL_FROM) throw new AppError("Email delivery is not configured.");
+  const input: SendEmailCommandInput = {
     FromEmailAddress: env.EMAIL_FROM,
     Destination: {
       ToAddresses: [message.to],
@@ -61,23 +70,23 @@ export function createAwsSesInput(env, message) {
       },
     },
   };
-  const replyTo = String(env.EMAIL_REPLY_TO || "").trim();
+  const replyTo = scalarText(env.EMAIL_REPLY_TO || "").trim();
   if (replyTo) input.ReplyToAddresses = [normalizeEmail(replyTo)];
-  const configurationSet = String(env.AWS_SES_CONFIGURATION_SET || "").trim();
+  const configurationSet = scalarText(env.AWS_SES_CONFIGURATION_SET || "").trim();
   if (configurationSet) input.ConfigurationSetName = configurationSet;
   return input;
 }
 
-async function sendWithAwsSes(env, message) {
-  const region = String(env.AWS_REGION || "").trim();
-  const accessKeyId = String(env.AWS_ACCESS_KEY_ID || "").trim();
-  const secretAccessKey = String(env.AWS_SECRET_ACCESS_KEY || "");
-  const sessionToken = String(env.AWS_SESSION_TOKEN || "").trim();
+async function sendWithAwsSes(env: WorkerEnv, message: EmailMessage) {
+  const region = scalarText(env.AWS_REGION || "").trim();
+  const accessKeyId = scalarText(env.AWS_ACCESS_KEY_ID || "").trim();
+  const secretAccessKey = scalarText(env.AWS_SECRET_ACCESS_KEY || "");
+  const sessionToken = scalarText(env.AWS_SESSION_TOKEN || "").trim();
   if (!region || !/^[a-z0-9-]{5,32}$/.test(region)) {
-    throw new Error("AWS SES region is not configured.");
+    throw new AppError("AWS SES region is not configured.");
   }
   if (!accessKeyId || !secretAccessKey) {
-    throw new Error("AWS SES credentials are not configured.");
+    throw new AppError("AWS SES credentials are not configured.");
   }
 
   const client = new SESv2Client({
@@ -98,24 +107,24 @@ async function sendWithAwsSes(env, message) {
   }
 }
 
-async function providerSend(env, message, dedupeKey) {
+async function providerSend(env: WorkerEnv, message: EmailMessage, dedupeKey: string) {
   if (env.EMAIL_SENDER && typeof env.EMAIL_SENDER.send === "function") {
     return env.EMAIL_SENDER.send({ ...message, dedupeKey });
   }
   if (!env.EMAIL_FROM) {
-    throw new Error("Email delivery is not configured.");
+    throw new AppError("Email delivery is not configured.");
   }
 
-  const provider = String(env.EMAIL_PROVIDER || "resend").toLowerCase();
+  const provider = scalarText(env.EMAIL_PROVIDER || "resend").toLowerCase();
   if (provider === "aws-ses" || provider === "ses") {
     return sendWithAwsSes(env, message);
   }
   if (!env.EMAIL_API_KEY) {
-    throw new Error("Email delivery is not configured.");
+    throw new AppError("Email delivery is not configured.");
   }
 
   let endpoint;
-  let headers = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
   let body;
   if (provider === "postmark") {
     endpoint = env.EMAIL_API_URL || "https://api.postmarkapp.com/email";
@@ -153,7 +162,7 @@ async function providerSend(env, message, dedupeKey) {
       text: message.text,
     };
   } else {
-    throw new Error(`Unsupported email provider: ${provider}.`);
+    throw new AppError(`Unsupported email provider: ${provider}.`);
   }
 
   const response = await fetch(endpoint, {
@@ -163,19 +172,20 @@ async function providerSend(env, message, dedupeKey) {
   });
   const responseText = await response.text();
   if (!response.ok) {
-    throw new Error(`Email provider returned HTTP ${response.status}.`);
+    throw new AppError(`Email provider returned HTTP ${response.status}.`);
   }
   try {
-    const data = responseText ? JSON.parse(responseText) : {};
-    return { id: data.id || data.MessageID || response.headers.get("x-message-id") || "" };
+    const data: unknown = responseText ? parseUnknownJson(responseText) : {};
+    const id = isRecord(data) && typeof data.id === "string" ? data.id : isRecord(data) && typeof data.MessageID === "string" ? data.MessageID : "";
+    return { id: id || response.headers.get("x-message-id") || "" };
   } catch {
     return { id: response.headers.get("x-message-id") || "" };
   }
 }
 
 export async function sendEmailOnce(
-  env,
-  { dedupeKey, category, to, subject, html, text, userId = null, purchaseId = null }
+  env: WorkerEnv,
+  { dedupeKey, category, to, subject, html, text, userId = null, purchaseId = null }: SendEmailOptions
 ) {
   const recipient = normalizeEmail(to);
   const now = new Date().toISOString();
@@ -192,7 +202,7 @@ export async function sendEmailOnce(
     "SELECT * FROM email_deliveries WHERE dedupe_key = ?"
   )
     .bind(dedupeKey)
-    .first();
+    .first<DeliveryRow>();
   if (delivery?.status === "sent") return { sent: true, duplicate: true };
 
   await env.DB.prepare(
@@ -211,7 +221,7 @@ export async function sendEmailOnce(
            updated_at = ?, sent_at = ?
        WHERE dedupe_key = ?`
     )
-      .bind(String(result?.id || "").slice(0, 255), sentAt, sentAt, dedupeKey)
+      .bind(scalarText(result?.id || "").slice(0, 255), sentAt, sentAt, dedupeKey)
       .run();
     return { sent: true };
   } catch (error) {
@@ -220,13 +230,13 @@ export async function sendEmailOnce(
        SET status = 'failed', last_error = ?, updated_at = ?
        WHERE dedupe_key = ?`
     )
-      .bind(String(error?.message || "Email delivery failed.").slice(0, 300), new Date().toISOString(), dedupeKey)
+      .bind(errorMessage(error, "Email delivery failed.").slice(0, 300), new Date().toISOString(), dedupeKey)
       .run();
     return { sent: false };
   }
 }
 
-export async function sendVerificationEmail(request, env, user, token, tokenId) {
+export async function sendVerificationEmail(request: Request, env: WorkerEnv, user: EmailRecipient, token: string, tokenId: string) {
   const url = `${publicOrigin(request, env)}/verify-email.html#token=${encodeURIComponent(token)}`;
   const name = escapeHtml(user.displayName || "reader");
   return sendEmailOnce(env, {
@@ -246,7 +256,7 @@ export async function sendVerificationEmail(request, env, user, token, tokenId) 
   });
 }
 
-export async function sendPasswordResetEmail(request, env, user, token, tokenId) {
+export async function sendPasswordResetEmail(request: Request, env: WorkerEnv, user: EmailRecipient, token: string, tokenId: string) {
   const url = `${publicOrigin(request, env)}/reset-password.html#token=${encodeURIComponent(token)}`;
   const name = escapeHtml(user.displayName || "reader");
   return sendEmailOnce(env, {
@@ -266,7 +276,7 @@ export async function sendPasswordResetEmail(request, env, user, token, tokenId)
   });
 }
 
-export async function sendClaimEmail(request, env, purchase, token, tokenId, bookTitles) {
+export async function sendClaimEmail(request: Request, env: WorkerEnv, purchase: { id: string; pendingEmail: string }, token: string, tokenId: string, bookTitles: string[]) {
   const url = `${publicOrigin(request, env)}/claim-purchase.html#token=${encodeURIComponent(token)}`;
   const books = bookTitles.map(escapeHtml).join(", ");
   return sendEmailOnce(env, {
@@ -286,7 +296,7 @@ export async function sendClaimEmail(request, env, purchase, token, tokenId, boo
   });
 }
 
-export async function sendPurchaseConfirmation(request, env, user, purchase, bookTitles, formats) {
+export async function sendPurchaseConfirmation(request: Request, env: WorkerEnv, user: EmailRecipient, purchase: { id: string }, bookTitles: string[], formats: string[]) {
   const url = `${publicOrigin(request, env)}/library.html`;
   const name = escapeHtml(user.displayName || "reader");
   const books = bookTitles.map(escapeHtml).join(", ");

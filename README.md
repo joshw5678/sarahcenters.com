@@ -6,7 +6,7 @@ This project serves the S.E. Centers storefront from a Cloudflare Worker. It use
 
 Complete these steps outside the repository before deploying:
 
-1. Use Node.js 22 or newer and run `npm install`.
+1. Use Node.js 22.13+ or Node.js 24+ and run `npm install`.
 2. Create a private R2 bucket named `tartarian-book-files`. Do not enable its public development URL or attach a public custom domain.
 3. Upload every EPUB and PDF at the exact object keys listed under [Book-to-file mapping](#book-to-file-mapping).
 4. Apply D1 migrations with `npm run db:migrate:remote`.
@@ -224,9 +224,21 @@ ADMIN_PASSWORD=...
 ADMIN_SESSION_SECRET=replace-with-another-random-secret
 ```
 
+## TypeScript and runtime validation
+
+All application code, the Node development server, build scripts, and tests are TypeScript. The browser, Cloudflare Worker, and Node tools have separate configurations extending `tsconfig.json`. Strict checks include unchecked array/index access, exact optional properties, unknown catch variables, and unused code. JavaScript source files are not accepted by the compiler.
+
+`npm run check` runs all three compiler projects and type-aware ESLint rules. Application code cannot use explicit `any`, non-null assertions, TypeScript suppression comments, or unsafe assignments and calls. Third-party generated Cloudflare declarations are excluded from linting and library checking.
+
+Shared Zod contracts validate API responses, persisted JSON, and webhook data. Request bodies remain `unknown` until validated; DOM helpers check that required elements exist and have the expected runtime type.
+
+`npm run build` type-checks first, then bundles the browser entry points to the existing `dist/src/*.js` URLs. Raw TypeScript source is not copied into the public asset directory. Wrangler compiles `worker/index.ts`; `npm run dev:node` builds the browser assets and runs `server.ts` through `tsx`.
+
+Cloudflare runtime declarations are generated for the compatibility date and flags in `wrangler.toml`. Regenerate them with `npm run typegen` after changing that configuration, and verify them with `npm run typegen:check`.
+
 ## Local development and tests
 
-Use Node.js 22 or newer.
+Use Node.js 22.13+ or Node.js 24+.
 
 ```sh
 npm install

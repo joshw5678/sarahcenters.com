@@ -1,14 +1,24 @@
-require("dotenv").config();
+import { scalarText } from "./shared/contracts.js";
+import "dotenv/config";
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import fsSync from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import express from "express";
+import type { Request as ExpressRequest, Response, NextFunction } from "express";
+import multer from "multer";
+import Stripe from "stripe";
+import * as z from "zod";
+import { bookSchema, orderSchema, contentSchema, parseJson, requireRecord, isRecord, errorMessage, eventSchema } from "./shared/contracts.js";
+import type { Book, BookFormat, Order, OrderItem, SiteContent } from "./shared/contracts.js";
+type Request = ExpressRequest<Record<string, string>, unknown, unknown>;
+const storeSchema = z.object({ version: z.number().default(1), books: z.array(bookSchema).default([]), content: contentSchema.default({}), orders: z.array(orderSchema).default([]), contentUpdatedAt: z.string().optional() });
+type Store = z.infer<typeof storeSchema>;
+type CheckoutItem = OrderItem & { format: "epub" | "epub_pdf"; formats: BookFormat[] };
+function body(req: Request): Record<string, unknown> { return requireRecord(req.body); }
+const ROOT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
-const crypto = require("crypto");
-const fs = require("fs/promises");
-const fsSync = require("fs");
-const path = require("path");
-const express = require("express");
-const multer = require("multer");
-const Stripe = require("stripe");
-
-const ROOT_DIR = __dirname;
 const DATA_DIR = path.join(ROOT_DIR, "data");
 const UPLOADS_DIR = path.join(ROOT_DIR, "uploads");
 const BOOK_UPLOADS_DIR = path.join(UPLOADS_DIR, "books");
@@ -26,7 +36,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   : null;
 const PDF_ADDON_CENTS = 100;
 
-const DEFAULT_BOOKS = [
+const DEFAULT_BOOKS: Book[] = [
   {
     id: "through",
     slug: "through",
@@ -91,7 +101,7 @@ const DEFAULT_BOOKS = [
 
 // Editable site copy. Keys map to [data-content] / [data-content-placeholder]
 // hooks in index.html; the public /api/content endpoint hydrates them at load.
-const DEFAULT_CONTENT = {
+const DEFAULT_CONTENT: SiteContent = {
   "site.title": "S.E. Centers — Author of the Tartarian Chronicles",
   "site.description":
     "S.E. Centers, author of the Tartarian Chronicles — ebook editions of an epic saga of buried truths, ancient power, and the fight for freedom.",
@@ -127,19 +137,18 @@ const DEFAULT_CONTENT = {
 
 const CONTENT_MAX_LENGTH = 2000;
 
-let storeCache = null;
-let initPromise = null;
-let writeChain = Promise.resolve();
+let storeCache: Store | null = null;
+let initPromise: Promise<void> | null = null;
+let writeChain: Promise<unknown> = Promise.resolve();
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
+function clone<T>(value: T): T { return structuredClone(value); }
+function initializedStore(): Store { if (!storeCache) throw new Error("Store is not initialized."); return storeCache; }
 
-function seedStore() {
+function seedStore(): Store {
   const seededAt = nowIso();
   return {
     version: 1,
@@ -153,7 +162,7 @@ function seedStore() {
   };
 }
 
-async function saveStore(data) {
+async function saveStore(data: Store) {
   await fs.mkdir(DATA_DIR, { recursive: true });
   const tmpPath = `${STORE_PATH}.tmp`;
   await fs.writeFile(tmpPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
@@ -168,9 +177,9 @@ async function ensureStore() {
 
       try {
         const raw = await fs.readFile(STORE_PATH, "utf8");
-        storeCache = JSON.parse(raw);
+        storeCache = storeSchema.parse(parseJson(raw));
       } catch (error) {
-        if (error.code !== "ENOENT") throw error;
+        if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
         storeCache = seedStore();
         await saveStore(storeCache);
       }
@@ -200,36 +209,37 @@ async function ensureStore() {
 
 async function readStore() {
   await ensureStore();
-  return clone(storeCache);
+  return clone(initializedStore());
 }
 
-async function mutateStore(mutator) {
+async function mutateStore<T>(mutator: (data: Store) => T | Promise<T>): Promise<T> {
   const run = writeChain.then(async () => {
     await ensureStore();
-    const result = await mutator(storeCache);
-    await saveStore(storeCache);
+    const data = initializedStore();
+    const result = await mutator(data);
+    await saveStore(data);
     return clone(result);
   });
   writeChain = run.catch(() => {});
   return run;
 }
 
-function sortBooks(books) {
+function sortBooks(books: Book[]) {
   return [...books].sort((a, b) => {
     const an = Number(a.number);
     const bn = Number(b.number);
     if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
-    return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+    return scalarText(a.createdAt || "").localeCompare(scalarText(b.createdAt || ""));
   });
 }
 
-function sortOrders(orders) {
+function sortOrders(orders: Order[]) {
   return [...orders].sort((a, b) =>
-    String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+    scalarText(b.createdAt || "").localeCompare(scalarText(a.createdAt || ""))
   );
 }
 
-function publicBook(book) {
+function publicBook(book: Book) {
   return {
     id: book.id,
     slug: book.slug,
@@ -244,18 +254,18 @@ function publicBook(book) {
   };
 }
 
-function publicContent(content) {
-  const merged = {};
+function publicContent(content: SiteContent) {
+  const merged: SiteContent = {};
   for (const key of Object.keys(DEFAULT_CONTENT)) {
     const value = content && typeof content[key] === "string" && content[key].length
       ? content[key]
-      : DEFAULT_CONTENT[key];
+      : DEFAULT_CONTENT[key] ?? "";
     merged[key] = value;
   }
   return merged;
 }
 
-function publicOrder(order) {
+function publicOrder(order: Order) {
   return {
     id: order.id,
     status: order.status,
@@ -273,14 +283,14 @@ function publicOrder(order) {
   };
 }
 
-function parseCookies(req) {
+function parseCookies(req: Request): Record<string, string> {
   const header = req.headers.cookie || "";
   return Object.fromEntries(
     header
       .split(";")
       .map((part) => part.trim())
       .filter(Boolean)
-      .map((part) => {
+      .map((part): [string, string] => {
         const index = part.indexOf("=");
         if (index === -1) return [part, ""];
         return [
@@ -291,17 +301,17 @@ function parseCookies(req) {
   );
 }
 
-function base64Url(input) {
+function base64Url(input: string) {
   return Buffer.from(input).toString("base64url");
 }
 
-function signPayload(payload) {
+function signPayload(payload: string) {
   return crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
 }
 
-function constantTimeEqual(a, b) {
-  const left = Buffer.from(String(a));
-  const right = Buffer.from(String(b));
+function constantTimeEqual(a: unknown, b: unknown) {
+  const left = Buffer.from(scalarText(a));
+  const right = Buffer.from(scalarText(b));
   if (left.length !== right.length) return false;
   return crypto.timingSafeEqual(left, right);
 }
@@ -313,20 +323,21 @@ function createAdminToken() {
   return `${payload}.${signPayload(payload)}`;
 }
 
-function verifyAdminToken(token) {
+function verifyAdminToken(token: string | undefined) {
   if (!token || !token.includes(".")) return false;
   const [payload, signature] = token.split(".");
+  if (!payload || !signature) return false;
   const expected = signPayload(payload);
   if (!constantTimeEqual(signature, expected)) return false;
   try {
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    return parsed.sub === "owner" && Number(parsed.exp) > Date.now();
+    const parsed = parseJson(Buffer.from(payload, "base64url").toString("utf8"));
+    return isRecord(parsed) && parsed.sub === "owner" && Number(parsed.exp) > Date.now();
   } catch {
     return false;
   }
 }
 
-function requireAdmin(req, res, next) {
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!process.env.ADMIN_PASSWORD) {
     return res.status(503).json({
       error: "Owner admin is not configured. Set ADMIN_PASSWORD in your environment.",
@@ -340,41 +351,41 @@ function requireAdmin(req, res, next) {
   return next();
 }
 
-function requiredString(value, label, maxLength = 400) {
-  const text = String(value || "").trim();
+function requiredString(value: unknown, label: string, maxLength = 400) {
+  const text = scalarText(value || "").trim();
   if (!text) throw new Error(`${label} is required.`);
   if (text.length > maxLength) throw new Error(`${label} is too long.`);
   return text;
 }
 
-function optionalString(value, maxLength = 1000) {
-  const text = String(value || "").trim();
+function optionalString(value: unknown, maxLength = 1000) {
+  const text = scalarText(value || "").trim();
   return text.slice(0, maxLength);
 }
 
-function parsePriceCents(value) {
-  const number = Number(String(value || "").replace(/[^0-9.]/g, ""));
+function parsePriceCents(value: unknown) {
+  const number = Number(scalarText(value || "").replace(/[^0-9.]/g, ""));
   if (!Number.isFinite(number) || number <= 0) throw new Error("A valid price is required.");
   const cents = Math.round(number * 100);
   if (cents < 50) throw new Error("Stripe requires a minimum charge of at least $0.50 USD.");
   return cents;
 }
 
-function normalizeCurrency(value) {
-  const currency = String(value || "usd").trim().toLowerCase();
+function normalizeCurrency(value: unknown) {
+  const currency = scalarText(value || "usd").trim().toLowerCase();
   if (!/^[a-z]{3}$/.test(currency)) throw new Error("Currency must be a 3-letter code.");
   return currency;
 }
 
-function slugify(value) {
-  return String(value || "")
+function slugify(value: unknown) {
+  return scalarText(value || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
 }
 
-function sanitizeFilename(value) {
+function sanitizeFilename(value: string) {
   const ext = path.extname(value).toLowerCase();
   const name = path
     .basename(value, ext)
@@ -385,26 +396,28 @@ function sanitizeFilename(value) {
   return `${name || "cover"}${ext || ".jpg"}`;
 }
 
-function getOrigin(req) {
+function getOrigin(req: Request) {
   if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/$/, "");
   return `${req.protocol}://${req.get("host")}`;
 }
 
-function absoluteImageUrl(req, imagePath) {
+function absoluteImageUrl(req: Request, imagePath: string) {
   if (/^https?:\/\//i.test(imagePath)) return imagePath;
   return new URL(imagePath, `${getOrigin(req)}/`).toString();
 }
 
-function normalizeCheckoutItems(rawItems, books) {
+function normalizeCheckoutItems(rawItems: unknown, books: Book[]): CheckoutItem[] {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     throw new Error("Add at least one book to checkout.");
   }
 
   const booksById = new Map(books.filter((book) => book.active).map((book) => [book.id, book]));
-  const merged = new Map();
+  const merged = new Map<string, { bookId: string; includePdf: boolean; quantity: number }>();
 
-  rawItems.forEach((item) => {
-    const bookId = String(item.bookId || item.id || "").trim();
+  const requestedItems: unknown[] = rawItems;
+  requestedItems.forEach((item) => {
+    if (!isRecord(item)) throw new Error("A checkout item is invalid.");
+    const bookId = scalarText(item.bookId || item.id || "").trim();
     const includePdf =
       item.includePdf === true ||
       item.format === "epub_pdf" ||
@@ -420,8 +433,9 @@ function normalizeCheckoutItems(rawItems, books) {
     });
   });
 
-  const normalized = [...merged.values()].map((entry) => {
+  const normalized: CheckoutItem[] = [...merged.values()].map((entry) => {
     const book = booksById.get(entry.bookId);
+    if (!book) throw new Error("A selected book is unavailable.");
     const pdfAddonCents = entry.includePdf ? PDF_ADDON_CENTS : 0;
     return {
       bookId: entry.bookId,
@@ -439,7 +453,8 @@ function normalizeCheckoutItems(rawItems, books) {
     };
   });
 
-  const currency = normalized[0].currency;
+  const currency = normalized[0]?.currency;
+  if (!currency) throw new Error("Add at least one book to checkout.");
   if (!normalized.every((item) => item.currency === currency)) {
     throw new Error("All items in one checkout must use the same currency.");
   }
@@ -447,7 +462,7 @@ function normalizeCheckoutItems(rawItems, books) {
   return normalized;
 }
 
-async function syncSessionToOrder(sessionOrId) {
+async function syncSessionToOrder(sessionOrId: string | { id: string }) {
   if (!stripe) return null;
 
   const sessionId = typeof sessionOrId === "string" ? sessionOrId : sessionOrId.id;
@@ -495,12 +510,15 @@ async function syncSessionToOrder(sessionOrId) {
   });
 }
 
-async function handleStripeEvent(event) {
+async function handleStripeEvent(rawEvent: unknown) {
+  const event = eventSchema.parse(rawEvent);
   if (
     event.type === "checkout.session.completed" ||
     event.type === "checkout.session.async_payment_succeeded"
   ) {
-    await syncSessionToOrder(event.data.object.id);
+    const id = event.data.object.id;
+    if (!id) throw new Error("Stripe event is missing a Checkout Session ID.");
+    await syncSessionToOrder(id);
   }
 
   if (event.type === "checkout.session.expired") {
@@ -560,22 +578,24 @@ const upload = multer({
   },
 });
 
-app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
   if (!stripe) return res.status(503).send("Stripe is not configured.");
 
-  let event;
+  let event: unknown;
+  const rawBody: unknown = req.body;
+  if (!Buffer.isBuffer(rawBody)) return res.status(400).send("Invalid webhook body.");
   try {
     if (process.env.STRIPE_WEBHOOK_SECRET) {
       event = stripe.webhooks.constructEvent(
-        req.body,
-        req.headers["stripe-signature"],
+        rawBody,
+        req.headers["stripe-signature"] ?? "",
         process.env.STRIPE_WEBHOOK_SECRET
       );
     } else {
-      event = JSON.parse(req.body.toString("utf8"));
+      event = parseJson(rawBody.toString("utf8"));
     }
   } catch (error) {
-    return res.status(400).send(`Webhook Error: ${error.message}`);
+    return res.status(400).send(`Webhook Error: ${errorMessage(error)}`);
   }
 
   try {
@@ -590,34 +610,35 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
 
-app.get("/api/books", async (_req, res) => {
+app.get("/api/books", async (_req: Request, res: Response) => {
   const data = await readStore();
   res.json({ books: sortBooks(data.books).filter((book) => book.active).map(publicBook) });
 });
 
-app.get("/api/content", async (_req, res) => {
+app.get("/api/content", async (_req: Request, res: Response) => {
   const data = await readStore();
   res.json({ content: publicContent(data.content) });
 });
 
-app.post("/api/checkout/session", async (req, res) => {
+app.post("/api/checkout/session", async (req: Request, res: Response) => {
   if (!stripe) {
     return res.status(503).json({
       error: "Stripe checkout is not configured. Set STRIPE_SECRET_KEY first.",
     });
   }
 
-  let pendingOrderId = null;
+  let pendingOrderId: string | null = null;
   try {
     const data = await readStore();
-    const items = normalizeCheckoutItems(req.body.items, data.books);
-    const currency = items[0].currency;
+    const items = normalizeCheckoutItems(body(req).items, data.books);
+    const currency = items[0]?.currency;
+    if (!currency) throw new Error("Add at least one book to checkout.");
     const subtotalCents = items.reduce(
       (sum, item) => sum + item.unitAmountCents * item.quantity,
       0
     );
     const createdAt = nowIso();
-    const order = {
+    const order: Order = {
       id: `ord_${crypto.randomUUID()}`,
       status: "pending",
       fulfillmentStatus: "unpaid",
@@ -645,7 +666,7 @@ app.post("/api/checkout/session", async (req, res) => {
     pendingOrderId = order.id;
 
     const origin = getOrigin(req);
-    const sessionParams = {
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
       payment_method_types: ["card"],
       line_items: items.map((item) => ({
@@ -679,6 +700,7 @@ app.post("/api/checkout/session", async (req, res) => {
     const session = await stripe.checkout.sessions.create(sessionParams);
     await mutateStore((store) => {
       const stored = store.orders.find((item) => item.id === order.id);
+      if (!stored) throw new Error("The checkout order could not be found.");
       stored.stripeSessionId = session.id;
       stored.updatedAt = nowIso();
       return stored;
@@ -693,7 +715,7 @@ app.post("/api/checkout/session", async (req, res) => {
         if (stored) {
           stored.status = "failed";
           stored.paymentStatus = "failed";
-          stored.lastPaymentError = error.message || "Unable to start checkout.";
+          stored.lastPaymentError = errorMessage(error) || "Unable to start checkout.";
           stored.updatedAt = nowIso();
         }
         return stored || null;
@@ -701,12 +723,12 @@ app.post("/api/checkout/session", async (req, res) => {
         console.error("Unable to mark failed checkout order:", storeError);
       });
     }
-    return res.status(400).json({ error: error.message || "Unable to start checkout." });
+    return res.status(400).json({ error: errorMessage(error) || "Unable to start checkout." });
   }
 });
 
-app.get("/api/checkout/receipt", async (req, res) => {
-  const sessionId = String(req.query.session_id || "").trim();
+app.get("/api/checkout/receipt", async (req: Request, res: Response) => {
+  const sessionId = scalarText(req.query.session_id || "").trim();
   if (!sessionId) return res.status(400).json({ error: "Missing checkout session." });
 
   try {
@@ -714,7 +736,7 @@ app.get("/api/checkout/receipt", async (req, res) => {
     let order = data.orders.find((item) => item.stripeSessionId === sessionId);
 
     if (stripe && order && order.status !== "paid") {
-      order = await syncSessionToOrder(sessionId);
+      order = (await syncSessionToOrder(sessionId)) || undefined;
       data = await readStore();
       order = data.orders.find((item) => item.stripeSessionId === sessionId) || order;
     }
@@ -727,14 +749,14 @@ app.get("/api/checkout/receipt", async (req, res) => {
   }
 });
 
-app.post("/api/admin/login", (req, res) => {
+app.post("/api/admin/login", (req: Request, res: Response) => {
   if (!process.env.ADMIN_PASSWORD) {
     return res.status(503).json({
       error: "Owner admin is not configured. Set ADMIN_PASSWORD in your environment.",
     });
   }
 
-  const password = String(req.body.password || "");
+  const password = scalarText(body(req).password || "");
   if (!constantTimeEqual(password, process.env.ADMIN_PASSWORD)) {
     return res.status(401).json({ error: "Incorrect owner password." });
   }
@@ -748,30 +770,29 @@ app.post("/api/admin/login", (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post("/api/admin/logout", (_req, res) => {
+app.post("/api/admin/logout", (_req: Request, res: Response) => {
   res.clearCookie(ADMIN_COOKIE);
   res.json({ ok: true });
 });
 
-app.get("/api/admin/me", requireAdmin, (_req, res) => {
+app.get("/api/admin/me", requireAdmin, (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-app.get("/api/admin/books", requireAdmin, async (_req, res) => {
+app.get("/api/admin/books", requireAdmin, async (_req: Request, res: Response) => {
   const data = await readStore();
   res.json({ books: sortBooks(data.books) });
 });
 
-app.get("/api/admin/content", requireAdmin, async (_req, res) => {
+app.get("/api/admin/content", requireAdmin, async (_req: Request, res: Response) => {
   const data = await readStore();
   res.json({ content: publicContent(data.content) });
 });
 
-app.patch("/api/admin/content", requireAdmin, async (req, res) => {
+app.patch("/api/admin/content", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const body = req.body && typeof req.body === "object" ? req.body : {};
-    const updates =
-      body.content && typeof body.content === "object" ? body.content : body;
+    const fields = requireRecord(req.body);
+    const updates = isRecord(fields.content) ? fields.content : fields;
 
     const updated = await mutateStore((data) => {
       if (!data.content || typeof data.content !== "object") data.content = {};
@@ -779,32 +800,32 @@ app.patch("/api/admin/content", requireAdmin, async (req, res) => {
         if (updates[key] === undefined) continue;
         // Blank a field to reset it back to the built-in default.
         const value = optionalString(updates[key], CONTENT_MAX_LENGTH);
-        data.content[key] = value || DEFAULT_CONTENT[key];
+        data.content[key] = value || DEFAULT_CONTENT[key] || "";
       }
       data.contentUpdatedAt = nowIso();
       return data.content;
     });
     return res.json({ content: publicContent(updated) });
   } catch (error) {
-    return res.status(400).json({ error: error.message || "Unable to update site text." });
+    return res.status(400).json({ error: errorMessage(error) || "Unable to update site text." });
   }
 });
 
-app.post("/api/admin/books", requireAdmin, upload.single("cover"), async (req, res) => {
+app.post("/api/admin/books", requireAdmin, upload.single("cover"), async (req: Request, res: Response) => {
   try {
-    const title = requiredString(req.body.title, "Title", 160);
+    const title = requiredString(body(req).title, "Title", 160);
     const createdAt = nowIso();
-    const book = {
+    const book: Book = {
       id: `book_${crypto.randomUUID()}`,
       slug: slugify(title),
-      number: optionalString(req.body.number, 24),
+      number: optionalString(body(req).number, 24),
       title,
-      tagline: optionalString(req.body.tagline, 240),
-      desc: optionalString(req.body.desc, 1200),
+      tagline: optionalString(body(req).tagline, 240),
+      desc: optionalString(body(req).desc, 1200),
       image: req.file ? `/uploads/books/${req.file.filename}` : "",
-      priceCents: parsePriceCents(req.body.price),
-      currency: normalizeCurrency(req.body.currency),
-      active: req.body.active !== "false",
+      priceCents: parsePriceCents(body(req).price),
+      currency: normalizeCurrency(body(req).currency),
+      active: body(req).active !== "false",
       createdAt,
       updatedAt: createdAt,
     };
@@ -817,36 +838,36 @@ app.post("/api/admin/books", requireAdmin, upload.single("cover"), async (req, r
     });
     return res.status(201).json({ book: stored });
   } catch (error) {
-    return res.status(400).json({ error: error.message || "Unable to add book." });
+    return res.status(400).json({ error: errorMessage(error) || "Unable to add book." });
   }
 });
 
-app.patch("/api/admin/books/:id", requireAdmin, async (req, res) => {
+app.patch("/api/admin/books/:id", requireAdmin, async (req: Request, res: Response) => {
   try {
     const updated = await mutateStore((data) => {
       const book = data.books.find((item) => item.id === req.params.id);
       if (!book) throw new Error("Book not found.");
 
-      if (req.body.title !== undefined) {
-        book.title = requiredString(req.body.title, "Title", 160);
+      if (body(req).title !== undefined) {
+        book.title = requiredString(body(req).title, "Title", 160);
         book.slug = slugify(book.title);
       }
-      if (req.body.number !== undefined) book.number = optionalString(req.body.number, 24);
-      if (req.body.tagline !== undefined) book.tagline = optionalString(req.body.tagline, 240);
-      if (req.body.desc !== undefined) book.desc = optionalString(req.body.desc, 1200);
-      if (req.body.price !== undefined) book.priceCents = parsePriceCents(req.body.price);
-      if (req.body.currency !== undefined) book.currency = normalizeCurrency(req.body.currency);
-      if (req.body.active !== undefined) book.active = Boolean(req.body.active);
+      if (body(req).number !== undefined) book.number = optionalString(body(req).number, 24);
+      if (body(req).tagline !== undefined) book.tagline = optionalString(body(req).tagline, 240);
+      if (body(req).desc !== undefined) book.desc = optionalString(body(req).desc, 1200);
+      if (body(req).price !== undefined) book.priceCents = parsePriceCents(body(req).price);
+      if (body(req).currency !== undefined) book.currency = normalizeCurrency(body(req).currency);
+      if (body(req).active !== undefined) book.active = Boolean(body(req).active);
       book.updatedAt = nowIso();
       return book;
     });
     return res.json({ book: updated });
   } catch (error) {
-    return res.status(400).json({ error: error.message || "Unable to update book." });
+    return res.status(400).json({ error: errorMessage(error) || "Unable to update book." });
   }
 });
 
-app.delete("/api/admin/books/:id", requireAdmin, async (req, res) => {
+app.delete("/api/admin/books/:id", requireAdmin, async (req: Request, res: Response) => {
   try {
     const updated = await mutateStore((data) => {
       const book = data.books.find((item) => item.id === req.params.id);
@@ -857,79 +878,79 @@ app.delete("/api/admin/books/:id", requireAdmin, async (req, res) => {
     });
     return res.json({ book: updated });
   } catch (error) {
-    return res.status(400).json({ error: error.message || "Unable to archive book." });
+    return res.status(400).json({ error: errorMessage(error) || "Unable to archive book." });
   }
 });
 
-app.get("/api/admin/orders", requireAdmin, async (req, res) => {
+app.get("/api/admin/orders", requireAdmin, async (req: Request, res: Response) => {
   const data = await readStore();
   let orders = sortOrders(data.orders);
-  const status = String(req.query.status || "").trim();
+  const status = scalarText(req.query.status || "").trim();
   if (status) orders = orders.filter((order) => order.status === status);
   res.json({ orders });
 });
 
-app.get("/api/admin/orders/:id", requireAdmin, async (req, res) => {
+app.get("/api/admin/orders/:id", requireAdmin, async (req: Request, res: Response) => {
   const data = await readStore();
   const order = data.orders.find((item) => item.id === req.params.id);
   if (!order) return res.status(404).json({ error: "Order not found." });
   return res.json({ order });
 });
 
-app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
+app.patch("/api/admin/orders/:id", requireAdmin, async (req: Request, res: Response) => {
   const allowed = new Set(["unpaid", "new", "delivered", "packing", "shipped", "complete", "canceled"]);
   try {
     const updated = await mutateStore((data) => {
       const order = data.orders.find((item) => item.id === req.params.id);
       if (!order) throw new Error("Order not found.");
 
-      if (req.body.fulfillmentStatus !== undefined) {
-        const status = String(req.body.fulfillmentStatus || "").trim();
+      if (body(req).fulfillmentStatus !== undefined) {
+        const status = scalarText(body(req).fulfillmentStatus || "").trim();
         if (!allowed.has(status)) throw new Error("Unknown fulfillment status.");
         order.fulfillmentStatus = status;
       }
-      if (req.body.ownerNotes !== undefined) {
-        order.ownerNotes = optionalString(req.body.ownerNotes, 1200);
+      if (body(req).ownerNotes !== undefined) {
+        order.ownerNotes = optionalString(body(req).ownerNotes, 1200);
       }
-      if (req.body.trackingNumber !== undefined) {
-        order.trackingNumber = optionalString(req.body.trackingNumber, 160);
+      if (body(req).trackingNumber !== undefined) {
+        order.trackingNumber = optionalString(body(req).trackingNumber, 160);
       }
       order.updatedAt = nowIso();
       return order;
     });
     return res.json({ order: updated });
   } catch (error) {
-    return res.status(400).json({ error: error.message || "Unable to update order." });
+    return res.status(400).json({ error: errorMessage(error) || "Unable to update order." });
   }
 });
 
-app.use("/src", express.static(path.join(ROOT_DIR, "src")));
+app.use("/src", express.static(path.join(ROOT_DIR, "dist/src")));
 app.use("/images", express.static(path.join(ROOT_DIR, "images")));
 app.use("/assets", express.static(path.join(ROOT_DIR, "assets")));
 app.use("/uploads", express.static(UPLOADS_DIR));
-app.get("/favicon.png", (_req, res) => {
+app.get("/favicon.png", (_req: Request, res: Response) => {
   res.sendFile(path.join(ROOT_DIR, "favicon.png"));
 });
 
-app.get(["/", "/index.html"], (_req, res) => {
+app.get(["/", "/index.html"], (_req: Request, res: Response) => {
   res.sendFile(path.join(ROOT_DIR, "index.html"));
 });
 
-app.get("/success.html", (_req, res) => {
+app.get("/success.html", (_req: Request, res: Response) => {
   res.sendFile(path.join(ROOT_DIR, "success.html"));
 });
 
-app.get("/admin.html", (_req, res) => {
+app.get("/admin.html", (_req: Request, res: Response) => {
   res.sendFile(path.join(ROOT_DIR, "admin.html"));
 });
 
-app.use((_req, res) => {
+app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: "Not found." });
 });
 
-app.use((error, _req, res, _next) => {
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error(error);
-  res.status(500).json({ error: error.message || "Server error." });
+  res.status(500).json({ error: errorMessage(error) || "Server error." });
 });
 
 ensureStore()

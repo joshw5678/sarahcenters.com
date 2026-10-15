@@ -1,15 +1,25 @@
+import { scalarText } from "../shared/contracts.js";
+import * as z from "zod";
+import { addressSchema, orderItemSchema } from "../shared/contracts.js";
+import type { Book, Order } from "../shared/contracts.js";
+import type { BookRow, OrderRow, CountRow, ContentRow } from "./rows.js";
+import { parseJson as parseUnknownJson } from "../shared/contracts.js";
+import type { WorkerEnv } from "./types.js";
 import { CONTENT_MAX_LENGTH, DEFAULT_BOOKS, DEFAULT_CONTENT } from "./catalog.js";
 
-function parseJson(value, fallback) {
+function parseJson<T>(value: string | null, schema: z.ZodType<T>, fallback: T): T {
   if (!value) return fallback;
   try {
-    return JSON.parse(value);
+    const result = schema.safeParse(parseUnknownJson(value));
+    return result.success ? result.data : fallback;
   } catch {
     return fallback;
   }
 }
 
-export function rowToBook(row) {
+export function rowToBook(row: BookRow): Book;
+export function rowToBook(row: BookRow | null): Book | null;
+export function rowToBook(row: BookRow | null): Book | null {
   if (!row) return null;
   return {
     id: row.id,
@@ -31,7 +41,9 @@ export function rowToBook(row) {
   };
 }
 
-export function rowToOrder(row) {
+export function rowToOrder(row: OrderRow): Order;
+export function rowToOrder(row: OrderRow | null): Order | null;
+export function rowToOrder(row: OrderRow | null): Order | null {
   if (!row) return null;
   return {
     id: row.id,
@@ -46,9 +58,9 @@ export function rowToOrder(row) {
       name: row.customer_name || "",
       email: row.customer_email || "",
       phone: row.customer_phone || "",
-      address: parseJson(row.customer_address_json, null),
+      address: parseJson(row.customer_address_json, addressSchema.nullable(), null),
     },
-    items: parseJson(row.items_json, []),
+    items: parseJson(row.items_json, z.array(orderItemSchema), []),
     subtotalCents: row.subtotal_cents,
     shippingCents: row.shipping_cents,
     totalCents: row.total_cents,
@@ -62,8 +74,8 @@ export function rowToOrder(row) {
   };
 }
 
-export async function ensureSeedBooks(env) {
-  const row = await env.DB.prepare("SELECT COUNT(*) AS count FROM books").first();
+export async function ensureSeedBooks(env: WorkerEnv) {
+  const row = await env.DB.prepare("SELECT COUNT(*) AS count FROM books").first<CountRow>();
   if (Number(row?.count || 0) > 0) return;
 
   const timestamp = new Date().toISOString();
@@ -96,23 +108,23 @@ export async function ensureSeedBooks(env) {
   await env.DB.batch(statements);
 }
 
-export async function listBooks(env, includeInactive = false) {
+export async function listBooks(env: WorkerEnv, includeInactive = false) {
   await ensureSeedBooks(env);
   const where = includeInactive ? "" : "WHERE active = 1";
   const result = await env.DB.prepare(
     `SELECT * FROM books ${where}
      ORDER BY CAST(number AS INTEGER), created_at, title`
-  ).all();
-  return result.results.map(rowToBook);
+  ).all<BookRow>();
+  return result.results.map((row) => rowToBook(row));
 }
 
-export async function findBook(env, id) {
+export async function findBook(env: WorkerEnv, id: string) {
   return rowToBook(
-    await env.DB.prepare("SELECT * FROM books WHERE id = ?").bind(id).first()
+    await env.DB.prepare("SELECT * FROM books WHERE id = ?").bind(id).first<BookRow>()
   );
 }
 
-export async function insertBook(env, book) {
+export async function insertBook(env: WorkerEnv, book: Book) {
   await env.DB.prepare(
     `INSERT INTO books
      (id, slug, number, title, tagline, description, image_url, price_cents,
@@ -142,7 +154,7 @@ export async function insertBook(env, book) {
   return findBook(env, book.id);
 }
 
-export async function updateBook(env, book) {
+export async function updateBook(env: WorkerEnv, book: Book) {
   await env.DB.prepare(
     `UPDATE books SET
       slug = ?, number = ?, title = ?, tagline = ?, description = ?,
@@ -166,7 +178,7 @@ export async function updateBook(env, book) {
   return findBook(env, book.id);
 }
 
-function orderBindings(order) {
+function orderBindings(order: Order) {
   return [
     order.status,
     order.fulfillmentStatus,
@@ -193,7 +205,7 @@ function orderBindings(order) {
   ];
 }
 
-export async function insertOrder(env, order) {
+export async function insertOrder(env: WorkerEnv, order: Order) {
   await env.DB.prepare(
     `INSERT INTO orders
      (status, fulfillment_status, payment_status, receipt_url,
@@ -208,7 +220,7 @@ export async function insertOrder(env, order) {
   return order;
 }
 
-export async function saveOrder(env, order) {
+export async function saveOrder(env: WorkerEnv, order: Order) {
   await env.DB.prepare(
     `UPDATE orders SET
       status = ?, fulfillment_status = ?, payment_status = ?, receipt_url = ?,
@@ -224,41 +236,41 @@ export async function saveOrder(env, order) {
   return order;
 }
 
-export async function findOrderById(env, id) {
+export async function findOrderById(env: WorkerEnv, id: string) {
   return rowToOrder(
-    await env.DB.prepare("SELECT * FROM orders WHERE id = ?").bind(id).first()
+    await env.DB.prepare("SELECT * FROM orders WHERE id = ?").bind(id).first<OrderRow>()
   );
 }
 
-export async function findOrderBySession(env, sessionId) {
+export async function findOrderBySession(env: WorkerEnv, sessionId: string) {
   return rowToOrder(
     await env.DB.prepare("SELECT * FROM orders WHERE stripe_session_id = ?")
       .bind(sessionId)
-      .first()
+      .first<OrderRow>()
   );
 }
 
-export async function listOrders(env, status = "") {
+export async function listOrders(env: WorkerEnv, status = "") {
   const statement = status
     ? env.DB.prepare(
         "SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC LIMIT 500"
       ).bind(status)
     : env.DB.prepare("SELECT * FROM orders ORDER BY created_at DESC LIMIT 500");
-  const result = await statement.all();
-  return result.results.map(rowToOrder);
+  const result = await statement.all<OrderRow>();
+  return result.results.map((row) => rowToOrder(row));
 }
 
-function normalizeContentValue(value, fallback) {
-  const text = String(value ?? "").trim().slice(0, CONTENT_MAX_LENGTH);
+function normalizeContentValue(value: unknown, fallback: string) {
+  const text = scalarText(value ?? "").trim().slice(0, CONTENT_MAX_LENGTH);
   return text || fallback;
 }
 
-export async function getContentMap(env) {
+export async function getContentMap(env: WorkerEnv) {
   const merged = { ...DEFAULT_CONTENT };
   try {
     const result = await env.DB.prepare(
       "SELECT key, value FROM site_content"
-    ).all();
+    ).all<ContentRow>();
     for (const row of result.results || []) {
       if (
         row &&
@@ -275,13 +287,13 @@ export async function getContentMap(env) {
   return merged;
 }
 
-export async function saveContentMap(env, updates) {
+export async function saveContentMap(env: WorkerEnv, updates: Record<string, unknown>) {
   const timestamp = new Date().toISOString();
   const statements = [];
   for (const key of Object.keys(DEFAULT_CONTENT)) {
     if (updates[key] === undefined) continue;
     // Blank a field to reset it back to the built-in default.
-    const value = normalizeContentValue(updates[key], DEFAULT_CONTENT[key]);
+    const value = normalizeContentValue(updates[key], DEFAULT_CONTENT[key] ?? "");
     statements.push(
       env.DB.prepare(
         `INSERT INTO site_content (key, value, updated_at) VALUES (?, ?, ?)
@@ -293,7 +305,7 @@ export async function saveContentMap(env, updates) {
   return getContentMap(env);
 }
 
-export async function beginStripeEvent(env, event) {
+export async function beginStripeEvent(env: WorkerEnv, event: { id: string; type: string }) {
   const result = await env.DB.prepare(
     `INSERT OR IGNORE INTO stripe_events (event_id, event_type, processed_at)
      VALUES (?, ?, ?)`
@@ -303,7 +315,7 @@ export async function beginStripeEvent(env, event) {
   return Number(result.meta?.changes || 0) === 1;
 }
 
-export async function releaseStripeEvent(env, eventId) {
+export async function releaseStripeEvent(env: WorkerEnv, eventId: string) {
   await env.DB.prepare("DELETE FROM stripe_events WHERE event_id = ?")
     .bind(eventId)
     .run();

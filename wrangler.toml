@@ -1,5 +1,5 @@
 name = "tartarian-chronicles"
-main = "worker/index.js"
+main = "worker/index.ts"
 account_id = "c17b904481dcb3a2a15ebbe7ecbc27b1"
 compatibility_date = "2026-07-10"
 compatibility_flags = [ "nodejs_compat" ]

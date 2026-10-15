@@ -1,3 +1,7 @@
+import { scalarText } from "../shared/contracts.js";
+import type { UserRow, EmailRecipient } from "./types.js";
+import { AppError, errorMessage, requireRecord } from "../shared/contracts.js";
+import type { WorkerEnv, ReadJson } from "./types.js";
 import {
   accountUser,
   clearCustomerCookie,
@@ -17,7 +21,7 @@ import {
 } from "./customer-auth.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email.js";
 
-function json(data, status = 200, headers = {}) {
+function json(data: unknown, status = 200, headers: HeadersInit = {}) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
@@ -28,27 +32,27 @@ function json(data, status = 200, headers = {}) {
   });
 }
 
-function requireObject(body, allowedKeys) {
+function requireObject(body: unknown, allowedKeys: readonly string[]): Record<string, unknown> {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
-    const error = new Error("Request body must be a JSON object.");
+    const error = new AppError("Request body must be a JSON object.");
     error.status = 400;
     error.expose = true;
     throw error;
   }
   const unknown = Object.keys(body).filter((key) => !allowedKeys.includes(key));
   if (unknown.length) {
-    const error = new Error("Request body contains unsupported fields.");
+    const error = new AppError("Request body contains unsupported fields.");
     error.status = 400;
     error.expose = true;
     throw error;
   }
-  return body;
+  return requireRecord(body);
 }
 
-function displayName(value) {
-  const name = String(value || "").trim().replace(/\s+/g, " ");
+function displayName(value: unknown) {
+  const name = scalarText(value || "").trim().replace(/\s+/g, " ");
   if (name.length > 100) {
-    const error = new Error("Name must be 100 characters or fewer.");
+    const error = new AppError("Name must be 100 characters or fewer.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -56,10 +60,10 @@ function displayName(value) {
   return name;
 }
 
-function tokenFromBody(body) {
-  const token = String(body.token || "").trim();
+function tokenFromBody(body: Record<string, unknown>) {
+  const token = scalarText(body.token || "").trim();
   if (token.length < 32 || token.length > 200) {
-    const error = new Error("This link is invalid or has expired.");
+    const error = new AppError("This link is invalid or has expired.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -67,26 +71,26 @@ function tokenFromBody(body) {
   return token;
 }
 
-function requireSameOrigin(request) {
+function requireSameOrigin(request: Request) {
   if (!hasValidOrigin(request)) {
-    const error = new Error("Invalid request origin.");
+    const error = new AppError("Invalid request origin.");
     error.status = 403;
     error.expose = true;
     throw error;
   }
 }
 
-async function findUserByEmail(env, normalized) {
+async function findUserByEmail(env: WorkerEnv, normalized: string) {
   return env.DB.prepare("SELECT * FROM users WHERE email_normalized = ?")
     .bind(normalized)
-    .first();
+    .first<UserRow>();
 }
 
-async function findUserById(env, id) {
-  return env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+async function findUserById(env: WorkerEnv, id: string) {
+  return env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first<UserRow>();
 }
 
-async function issueVerification(request, env, user) {
+async function issueVerification(request: Request, env: WorkerEnv, user: EmailRecipient) {
   const token = randomToken(32);
   const tokenId = `evt_${crypto.randomUUID()}`;
   const now = new Date();
@@ -105,7 +109,7 @@ async function issueVerification(request, env, user) {
   return sendVerificationEmail(request, env, user, token, tokenId);
 }
 
-async function issuePasswordReset(request, env, user) {
+async function issuePasswordReset(request: Request, env: WorkerEnv, user: EmailRecipient) {
   const token = randomToken(32);
   const tokenId = `prt_${crypto.randomUUID()}`;
   const now = new Date();
@@ -124,10 +128,10 @@ async function issuePasswordReset(request, env, user) {
   return sendPasswordResetEmail(request, env, user, token, tokenId);
 }
 
-async function requireSession(request, env) {
+async function requireSession(request: Request, env: WorkerEnv) {
   const session = await getCustomerSession(request, env);
   if (!session) {
-    const error = new Error("Please log in to continue.");
+    const error = new AppError("Please log in to continue.");
     error.status = 401;
     error.expose = true;
     throw error;
@@ -135,7 +139,7 @@ async function requireSession(request, env) {
   return session;
 }
 
-async function register(request, env, readJson) {
+async function register(request: Request, env: WorkerEnv, readJson: ReadJson) {
   requireSameOrigin(request);
   const body = requireObject(await readJson(request), ["email", "password", "displayName"]);
   const normalized = normalizeEmail(body.email);
@@ -161,7 +165,7 @@ async function register(request, env, readJson) {
   const now = new Date().toISOString();
   const user = {
     id: `usr_${crypto.randomUUID()}`,
-    email: String(body.email).trim(),
+    email: scalarText(body.email).trim(),
     displayName: name,
   };
   try {
@@ -182,7 +186,7 @@ async function register(request, env, readJson) {
       )
       .run();
   } catch (error) {
-    if (String(error?.message || "").toLowerCase().includes("unique")) {
+    if (errorMessage(error, "").toLowerCase().includes("unique")) {
       return json(
         {
           ok: true,
@@ -220,14 +224,14 @@ async function register(request, env, readJson) {
   );
 }
 
-async function login(request, env, readJson) {
+async function login(request: Request, env: WorkerEnv, readJson: ReadJson) {
   requireSameOrigin(request);
   const body = requireObject(await readJson(request), ["email", "password"]);
   let normalized;
   try {
     normalized = normalizeEmail(body.email);
   } catch {
-    normalized = String(body.email || "").trim().toLowerCase().slice(0, 254);
+    normalized = scalarText(body.email || "").trim().toLowerCase().slice(0, 254);
   }
   await enforceRateLimit(request, env, "login", normalized, {
     limit: 10,
@@ -236,10 +240,10 @@ async function login(request, env, readJson) {
   });
   const user = normalized.includes("@") ? await findUserByEmail(env, normalized) : null;
   const passwordValid = user
-    ? await verifyPassword(String(body.password || ""), user.password_hash)
-    : Boolean(await hashPassword(String(body.password || ""), passwordIterations(env))) && false;
+    ? await verifyPassword(scalarText(body.password || ""), user.password_hash)
+    : Boolean(await hashPassword(scalarText(body.password || ""), passwordIterations(env))) && false;
   if (!user || !passwordValid || user.status !== "active") {
-    const error = new Error("Invalid email or password.");
+    const error = new AppError("Invalid email or password.");
     error.status = 401;
     error.expose = true;
     throw error;
@@ -265,17 +269,17 @@ async function login(request, env, readJson) {
   );
 }
 
-async function logout(request, env) {
+async function logout(request: Request, env: WorkerEnv) {
   const session = await requireSession(request, env);
   await requireCsrf(request, session);
   await revokeCustomerSession(env, session.id);
   return json({ ok: true }, 200, { "Set-Cookie": clearCustomerCookie(request) });
 }
 
-async function forgotPassword(request, env, readJson) {
+async function forgotPassword(request: Request, env: WorkerEnv, readJson: ReadJson) {
   requireSameOrigin(request);
   const body = requireObject(await readJson(request), ["email"]);
-  let normalized = String(body.email || "").trim().toLowerCase().slice(0, 254);
+  let normalized = scalarText(body.email || "").trim().toLowerCase().slice(0, 254);
   try {
     normalized = normalizeEmail(body.email);
   } catch {
@@ -300,7 +304,7 @@ async function forgotPassword(request, env, readJson) {
   });
 }
 
-async function resetPassword(request, env, readJson) {
+async function resetPassword(request: Request, env: WorkerEnv, readJson: ReadJson) {
   requireSameOrigin(request);
   const body = requireObject(await readJson(request), ["token", "password"]);
   const token = tokenFromBody(body);
@@ -313,9 +317,9 @@ async function resetPassword(request, env, readJson) {
        AND u.status = 'active'`
   )
     .bind(tokenHash, now)
-    .first();
+    .first<{ user_id: string; email_normalized: string }>();
   if (!record) {
-    const error = new Error("This password-reset link is invalid, expired, or already used.");
+    const error = new AppError("This password-reset link is invalid, expired, or already used.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -335,8 +339,8 @@ async function resetPassword(request, env, readJson) {
        WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?`
     ).bind(now, tokenHash, now),
   ]);
-  if (Number(results[0].meta?.changes || 0) !== 1) {
-    const error = new Error("This password-reset link is invalid, expired, or already used.");
+  if (Number(results[0]?.meta?.changes || 0) !== 1) {
+    const error = new AppError("This password-reset link is invalid, expired, or already used.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -354,7 +358,7 @@ async function resetPassword(request, env, readJson) {
   );
 }
 
-async function verifyEmail(request, env, readJson) {
+async function verifyEmail(request: Request, env: WorkerEnv, readJson: ReadJson) {
   requireSameOrigin(request);
   const body = requireObject(await readJson(request), ["token"]);
   const tokenHash = await hashToken(tokenFromBody(body));
@@ -364,9 +368,9 @@ async function verifyEmail(request, env, readJson) {
      WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?`
   )
     .bind(tokenHash, now)
-    .first();
+    .first<{ user_id: string }>();
   if (!record) {
-    const error = new Error("This verification link is invalid, expired, or already used.");
+    const error = new AppError("This verification link is invalid, expired, or already used.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -384,8 +388,8 @@ async function verifyEmail(request, env, readJson) {
        WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?`
     ).bind(now, tokenHash, now),
   ]);
-  if (Number(results[0].meta?.changes || 0) !== 1) {
-    const error = new Error("This verification link is invalid, expired, or already used.");
+  if (Number(results[0]?.meta?.changes || 0) !== 1) {
+    const error = new AppError("This verification link is invalid, expired, or already used.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -393,7 +397,7 @@ async function verifyEmail(request, env, readJson) {
   return json({ ok: true, message: "Email verified. Your account is ready." });
 }
 
-async function resendVerification(request, env) {
+async function resendVerification(request: Request, env: WorkerEnv) {
   const session = await requireSession(request, env);
   await requireCsrf(request, session);
   if (session.user.emailVerified) {
@@ -418,7 +422,7 @@ async function resendVerification(request, env) {
   });
 }
 
-async function updateAccount(request, env, readJson) {
+async function updateAccount(request: Request, env: WorkerEnv, readJson: ReadJson) {
   const session = await requireSession(request, env);
   await requireCsrf(request, session);
   const body = requireObject(await readJson(request), [
@@ -428,28 +432,29 @@ async function updateAccount(request, env, readJson) {
     "newPassword",
   ]);
   if (!Object.keys(body).length) {
-    const error = new Error("Provide at least one account change.");
+    const error = new AppError("Provide at least one account change.");
     error.status = 400;
     error.expose = true;
     throw error;
   }
   const user = await findUserById(env, session.userId);
+  if (!user) throw new AppError("Account not found.", 404);
   const name = body.displayName === undefined ? user.display_name : displayName(body.displayName);
   const normalized =
     body.email === undefined ? user.email_normalized : normalizeEmail(body.email);
   const emailChanged = normalized !== user.email_normalized;
-  const passwordChanged = body.newPassword !== undefined && String(body.newPassword).length > 0;
+  const passwordChanged = body.newPassword !== undefined && scalarText(body.newPassword).length > 0;
   if (emailChanged || passwordChanged) {
-    const valid = await verifyPassword(String(body.currentPassword || ""), user.password_hash);
+    const valid = await verifyPassword(scalarText(body.currentPassword || ""), user.password_hash);
     if (!valid) {
-      const error = new Error("Your current password is incorrect.");
+      const error = new AppError("Your current password is incorrect.");
       error.status = 400;
       error.expose = true;
       throw error;
     }
   }
   if (emailChanged && (await findUserByEmail(env, normalized))) {
-    const error = new Error("The account could not be updated with that email address.");
+    const error = new AppError("The account could not be updated with that email address.");
     error.status = 409;
     error.expose = true;
     throw error;
@@ -461,7 +466,7 @@ async function updateAccount(request, env, readJson) {
       )
     : user.password_hash;
   const now = new Date().toISOString();
-  const email = emailChanged ? String(body.email).trim() : user.email;
+  const email = emailChanged ? scalarText(body.email).trim() : user.email;
   const statements = [
     env.DB.prepare(
       `UPDATE users SET email = ?, email_normalized = ?, password_hash = ?,
@@ -503,6 +508,7 @@ async function updateAccount(request, env, readJson) {
     emailSent = result.sent;
   }
   const updated = await findUserById(env, user.id);
+  if (!updated) throw new AppError("Account not found.", 404);
   return json({
     ok: true,
     user: accountUser(updated),
@@ -514,7 +520,7 @@ async function updateAccount(request, env, readJson) {
   });
 }
 
-async function revokeOtherSessions(request, env) {
+async function revokeOtherSessions(request: Request, env: WorkerEnv) {
   const session = await requireSession(request, env);
   await requireCsrf(request, session);
   await env.DB.prepare(
@@ -526,7 +532,7 @@ async function revokeOtherSessions(request, env) {
   return json({ ok: true, message: "Other signed-in sessions were revoked." });
 }
 
-export async function handleAccountRequest(request, env, url, readJson) {
+export async function handleAccountRequest(request: Request, env: WorkerEnv, url: URL, readJson: ReadJson) {
   const { pathname } = url;
   const method = request.method;
   if (pathname === "/api/account/register" && method === "POST") {

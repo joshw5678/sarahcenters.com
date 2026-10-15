@@ -1,9 +1,13 @@
+import type { z } from "zod";
+import { AppError, errorMessage, accountResponseSchema, checkoutStatusSchema, downloadResponseSchema } from "../shared/contracts.js";
+import type { AccountResponse, PurchaseBook } from "../shared/contracts.js";
+import { element, requestJson } from "./browser.js";
 (() => {
   "use strict";
 
-  const message = document.querySelector("[data-purchase-message]");
-  const booksRoot = document.querySelector("[data-purchase-books]");
-  const libraryLink = document.querySelector("[data-library-link]");
+  const message = element("[data-purchase-message]", HTMLElement);
+  const booksRoot = element("[data-purchase-books]", HTMLElement);
+  const libraryLink = element("[data-library-link]", HTMLAnchorElement);
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const sessionId = params.get("session_id") || sessionStorage.getItem("tc_checkout_session") || "";
   if (params.get("session_id")) {
@@ -11,22 +15,15 @@
     history.replaceState(null, "", location.pathname);
   }
 
-  async function api(path, options = {}) {
-    const response = await fetch(path, {
-      credentials: "same-origin",
-      headers: { Accept: "application/json", ...(options.headers || {}) },
-      ...options,
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(data.error || "The purchase could not be loaded.");
-      error.status = response.status;
-      throw error;
-    }
-    return data;
+  function api(path: "/api/account/me", options?: RequestInit): Promise<AccountResponse>;
+  function api(path: "/api/checkout/status", options?: RequestInit): Promise<z.infer<typeof checkoutStatusSchema>>;
+  function api(path: string, options?: RequestInit): Promise<z.infer<typeof downloadResponseSchema>>;
+  async function api(path: string, options: RequestInit = {}) {
+    if (path === "/api/account/me") return requestJson(path, accountResponseSchema, options);
+    if (path === "/api/checkout/status") return requestJson(path, checkoutStatusSchema, options);
+    return requestJson(path, downloadResponseSchema, options);
   }
-
-  function jsonOptions(body, csrfToken) {
+  function jsonOptions(body: unknown, csrfToken: string) {
     return {
       method: "POST",
       headers: {
@@ -37,12 +34,12 @@
     };
   }
 
-  function setMessage(text, kind = "info") {
+  function setMessage(text: string, kind = "info") {
     message.textContent = text;
     message.dataset.kind = kind;
   }
 
-  async function download(book, format, account, button) {
+  async function download(book: PurchaseBook, format: string, account: AccountResponse, button: HTMLButtonElement) {
     const original = button.textContent;
     button.disabled = true;
     button.textContent = "Preparing...";
@@ -53,13 +50,13 @@
       );
       window.location.assign(data.url);
     } catch (error) {
-      setMessage(error.message, "error");
+      setMessage(errorMessage(error), "error");
       button.disabled = false;
       button.textContent = original;
     }
   }
 
-  function renderBooks(books, account) {
+  function renderBooks(books: PurchaseBook[], account: AccountResponse) {
     booksRoot.replaceChildren();
     books.forEach((book) => {
       const article = document.createElement("article");
@@ -91,16 +88,16 @@
       setMessage("This Checkout Session is missing or invalid.", "error");
       return;
     }
-    let account;
+    let account: AccountResponse;
     try {
       account = await api("/api/account/me");
     } catch (error) {
-      if (error.status === 401) {
+      if (error instanceof AppError && error.status === 401) {
         const destination = `/success.html#session_id=${encodeURIComponent(sessionId)}`;
         window.location.replace(`/login.html?return=${encodeURIComponent(destination)}`);
         return;
       }
-      setMessage(error.message, "error");
+      setMessage(errorMessage(error), "error");
       return;
     }
     if (!account.user.emailVerified) {
@@ -130,14 +127,14 @@
           "info"
         );
       } catch (error) {
-        if (error.status === 404) {
+        if (error instanceof AppError && error.status === 404) {
           setMessage(
             "This Checkout Session is invalid or belongs to another account.",
             "error"
           );
           return;
         }
-        setMessage(error.message, "error");
+        setMessage(errorMessage(error), "error");
         return;
       }
     }
@@ -148,5 +145,5 @@
     libraryLink.hidden = false;
   }
 
-  load();
+  void load().catch((error: unknown) => setMessage(errorMessage(error), "error"));
 })();

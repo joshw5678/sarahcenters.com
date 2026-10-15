@@ -1,3 +1,9 @@
+import { scalarText } from "../shared/contracts.js";
+import { parseFormats } from "../shared/contracts.js";
+import type { LibraryBook } from "../shared/contracts.js";
+interface LibraryRow { book_id: string; formats_json: string; granted_at: string; purchased_at: string; slug: string; number: string; title: string; description: string; image_url: string; epub_r2_key: string | null; pdf_r2_key: string | null }
+import { AppError, requireRecord } from "../shared/contracts.js";
+import type { WorkerEnv, ReadJson } from "./types.js";
 import {
   getCustomerSession,
   hashToken,
@@ -9,7 +15,7 @@ import { sendPurchaseConfirmation } from "./email.js";
 
 const DOWNLOAD_TTL_MS = 2 * 60 * 1000;
 
-function json(data, status = 200, headers = {}) {
+function json(data: unknown, status = 200, headers: HeadersInit = {}) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
@@ -20,41 +26,32 @@ function json(data, status = 200, headers = {}) {
   });
 }
 
-function parseFormats(value) {
-  try {
-    const parsed = JSON.parse(value || "[]");
-    return [...new Set(parsed.filter((format) => format === "epub" || format === "pdf"))];
-  } catch {
-    return [];
-  }
-}
-
-function requireObject(body, allowedKeys) {
+function requireObject(body: unknown, allowedKeys: readonly string[]) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
-    const error = new Error("Request body must be a JSON object.");
+    const error = new AppError("Request body must be a JSON object.");
     error.status = 400;
     error.expose = true;
     throw error;
   }
   if (Object.keys(body).some((key) => !allowedKeys.includes(key))) {
-    const error = new Error("Request body contains unsupported fields.");
+    const error = new AppError("Request body contains unsupported fields.");
     error.status = 400;
     error.expose = true;
     throw error;
   }
-  return body;
+  return requireRecord(body);
 }
 
-async function requireVerifiedSession(request, env) {
+async function requireVerifiedSession(request: Request, env: WorkerEnv) {
   const session = await getCustomerSession(request, env);
   if (!session) {
-    const error = new Error("Please log in to continue.");
+    const error = new AppError("Please log in to continue.");
     error.status = 401;
     error.expose = true;
     throw error;
   }
   if (!session.user.emailVerified) {
-    const error = new Error("Verify your email address to access purchased files.");
+    const error = new AppError("Verify your email address to access purchased files.");
     error.status = 403;
     error.code = "EMAIL_VERIFICATION_REQUIRED";
     error.expose = true;
@@ -63,7 +60,7 @@ async function requireVerifiedSession(request, env) {
   return session;
 }
 
-export async function listCustomerLibrary(env, userId) {
+export async function listCustomerLibrary(env: WorkerEnv, userId: string) {
   const result = await env.DB.prepare(
     `SELECT e.book_id, e.formats_json, e.granted_at, p.purchased_at,
             b.slug, b.number, b.title, b.description, b.image_url,
@@ -76,8 +73,8 @@ export async function listCustomerLibrary(env, userId) {
      ORDER BY p.purchased_at DESC, b.title`
   )
     .bind(userId)
-    .all();
-  const byBook = new Map();
+    .all<LibraryRow>();
+  const byBook = new Map<string, LibraryBook>();
   for (const row of result.results || []) {
     const current = byBook.get(row.book_id);
     const allowed = parseFormats(row.formats_json).filter((format) =>
@@ -103,13 +100,13 @@ export async function listCustomerLibrary(env, userId) {
   return [...byBook.values()];
 }
 
-async function createDownloadGrant(request, env, bookId, body) {
+async function createDownloadGrant(request: Request, env: WorkerEnv, bookId: string, body: unknown) {
   const session = await requireVerifiedSession(request, env);
   await requireCsrf(request, session);
-  requireObject(body, ["format"]);
-  const format = String(body.format || "").toLowerCase();
+  const fields = requireObject(body, ["format"]);
+  const format = scalarText(fields.format || "").toLowerCase();
   if (format !== "epub" && format !== "pdf") {
-    const error = new Error("Choose EPUB or PDF.");
+    const error = new AppError("Choose EPUB or PDF.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -125,7 +122,7 @@ async function createDownloadGrant(request, env, bookId, body) {
      ORDER BY e.granted_at DESC`
   )
     .bind(format, session.userId, bookId)
-    .all();
+    .all<{ formats_json: string; object_key: string | null }>();
   const entitlementRows = entitlementResult.results || [];
   const allowedFormats = new Set(
     entitlementRows.flatMap((row) => parseFormats(row.formats_json))
@@ -133,9 +130,9 @@ async function createDownloadGrant(request, env, bookId, body) {
   if (
     !entitlementRows.length ||
     !allowedFormats.has(format) ||
-    !entitlementRows[0].object_key
+    !entitlementRows[0]?.object_key
   ) {
-    const error = new Error("This book format is not available in your library.");
+    const error = new AppError("This book format is not available in your library.");
     error.status = 403;
     error.expose = true;
     throw error;
@@ -165,8 +162,8 @@ async function createDownloadGrant(request, env, bookId, body) {
   });
 }
 
-function safeFilename(title, format) {
-  const base = String(title || "book")
+function safeFilename(title: string, format: string) {
+  const base = scalarText(title || "book")
     .normalize("NFKD")
     .replace(/[^A-Za-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -174,9 +171,9 @@ function safeFilename(title, format) {
   return `${base}.${format}`;
 }
 
-async function streamDownload(request, env, url) {
+async function streamDownload(request: Request, env: WorkerEnv, url: URL) {
   const session = await requireVerifiedSession(request, env);
-  const token = String(url.searchParams.get("token") || "").trim();
+  const token = scalarText(url.searchParams.get("token") || "").trim();
   if (token.length < 32 || token.length > 200) {
     return json({ error: "This download link is invalid or expired." }, 404);
   }
@@ -191,7 +188,7 @@ async function streamDownload(request, env, url) {
        AND g.user_id = ? LIMIT 1`
   )
     .bind(tokenHash, now, session.userId)
-    .first();
+    .first<{ id: string; user_id: string; book_id: string; format: "epub" | "pdf"; title: string; epub_r2_key: string | null; pdf_r2_key: string | null }>();
   if (!grant) {
     return json({ error: "This download link is invalid or expired." }, 404);
   }
@@ -202,7 +199,7 @@ async function streamDownload(request, env, url) {
        AND p.entitlement_status = 'active'`
   )
     .bind(session.userId, grant.book_id)
-    .all();
+    .all<{ formats_json: string }>();
   const activeFormats = new Set(
     (entitlementResult.results || []).flatMap((row) => parseFormats(row.formats_json))
   );
@@ -237,18 +234,18 @@ async function streamDownload(request, env, url) {
   headers.set("Cache-Control", "private, no-store, max-age=0");
   headers.set("Pragma", "no-cache");
   headers.set("X-Content-Type-Options", "nosniff");
-  if (object.size !== undefined) headers.set("Content-Length", String(object.size));
+  if (object.size !== undefined) headers.set("Content-Length", scalarText(object.size));
   if (object.httpEtag) headers.set("ETag", object.httpEtag);
   return new Response(object.body, { status: 200, headers });
 }
 
-async function claimPurchase(request, env, body) {
+async function claimPurchase(request: Request, env: WorkerEnv, body: unknown) {
   const session = await requireVerifiedSession(request, env);
   await requireCsrf(request, session);
-  requireObject(body, ["token"]);
-  const token = String(body.token || "").trim();
+  const fields = requireObject(body, ["token"]);
+  const token = scalarText(fields.token || "").trim();
   if (token.length < 32 || token.length > 200) {
-    const error = new Error("This claim link is invalid or expired.");
+    const error = new AppError("This claim link is invalid or expired.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -261,13 +258,13 @@ async function claimPurchase(request, env, body) {
      WHERE c.token_hash = ? AND c.used_at IS NULL AND c.expires_at > ?`
   )
     .bind(tokenHash, now)
-    .first();
+    .first<{ id: string; purchase_id: string; email_normalized: string; user_id: string | null }>();
   if (
     !claim ||
     claim.user_id ||
     normalizeEmail(session.user.email) !== claim.email_normalized
   ) {
-    const error = new Error(
+    const error = new AppError(
       "This claim link is invalid, expired, already used, or belongs to another email address."
     );
     error.status = 400;
@@ -317,8 +314,8 @@ async function claimPurchase(request, env, body) {
          )`
     ).bind(now, session.userId, claim.id, now, session.userId),
   ]);
-  if (Number(results[0].meta?.changes || 0) !== 1) {
-    const error = new Error("This purchase is no longer available to claim.");
+  if (Number(results[0]?.meta?.changes || 0) !== 1) {
+    const error = new AppError("This purchase is no longer available to claim.");
     error.status = 409;
     error.expose = true;
     throw error;
@@ -330,7 +327,7 @@ async function claimPurchase(request, env, body) {
      WHERE pi.purchase_id = ? ORDER BY b.title`
   )
     .bind(claim.purchase_id)
-    .all();
+    .all<{ title: string; formats_json: string }>();
   const allFormats = [
     ...new Set((items.results || []).flatMap((item) => parseFormats(item.formats_json))),
   ];
@@ -349,7 +346,7 @@ async function claimPurchase(request, env, body) {
   return json({ ok: true, message: "Purchase claimed. Your books are now in My Library." });
 }
 
-export async function handleLibraryRequest(request, env, url, readJson) {
+export async function handleLibraryRequest(request: Request, env: WorkerEnv, url: URL, readJson: ReadJson) {
   if (url.pathname === "/api/library" && request.method === "GET") {
     const session = await requireVerifiedSession(request, env);
     return json({ books: await listCustomerLibrary(env, session.userId) });
@@ -358,7 +355,7 @@ export async function handleLibraryRequest(request, env, url, readJson) {
   if (grantMatch && request.method === "POST") {
     let bookId;
     try {
-      bookId = decodeURIComponent(grantMatch[1]);
+      bookId = decodeURIComponent(grantMatch[1] ?? "");
     } catch {
       return json({ error: "Invalid book identifier." }, 400);
     }

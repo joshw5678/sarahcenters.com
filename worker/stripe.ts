@@ -1,3 +1,14 @@
+import { scalarText } from "../shared/contracts.js";
+
+import { parseFormats } from "../shared/contracts.js";
+import type { Book, BookFormat, Order, OrderItem } from "../shared/contracts.js";
+import type { StripeGateway, StripeLine, StripeSession, UserRow, PurchaseRow } from "./types.js";
+type CheckoutItem = OrderItem & { format: "epub" | "epub_pdf"; formats: BookFormat[]; basePriceCents: number; pdfAddonCents: number; formatLabel: string };
+interface CheckoutAccount { userId: string; email: string; displayName?: string; stripeCustomerId?: string | null }
+import { eventSchema } from "../shared/contracts.js";
+import type { PaymentEvent, PaymentEventObject } from "../shared/contracts.js";
+import { AppError, errorMessage, isRecord } from "../shared/contracts.js";
+import type { WorkerEnv } from "./types.js";
 import Stripe from "stripe";
 import {
   beginStripeEvent,
@@ -14,7 +25,7 @@ import { sendClaimEmail, sendPurchaseConfirmation } from "./email.js";
 
 const PDF_ADDON_CENTS = 100;
 
-function stripeClient(env) {
+function stripeClient(env: WorkerEnv): StripeGateway | null {
   if (env.STRIPE_CLIENT) return env.STRIPE_CLIENT;
   if (!env.STRIPE_SECRET_KEY) return null;
   return new Stripe(env.STRIPE_SECRET_KEY, {
@@ -22,33 +33,22 @@ function stripeClient(env) {
   });
 }
 
-function publicOrigin(request, env) {
+function publicOrigin(request: Request, env: WorkerEnv) {
   const requestUrl = new URL(request.url);
   if (["localhost", "127.0.0.1", "::1"].includes(requestUrl.hostname)) {
     return requestUrl.origin;
   }
-  return String(env.PUBLIC_URL || requestUrl.origin).replace(/\/$/, "");
+  return scalarText(env.PUBLIC_URL || requestUrl.origin).replace(/\/$/, "");
 }
 
-function stripeObjectId(value) {
+function stripeObjectId(value: string | { id?: string } | null | undefined) {
   if (!value) return null;
   return typeof value === "string" ? value : value.id || null;
 }
 
-function parseFormats(value) {
-  if (Array.isArray(value)) {
-    return [...new Set(value.filter((format) => format === "epub" || format === "pdf"))];
-  }
-  try {
-    return parseFormats(JSON.parse(value || "[]"));
-  } catch {
-    return [];
-  }
-}
-
-export function normalizeCheckoutItems(rawItems, books) {
+export function normalizeCheckoutItems(rawItems: unknown, books: Book[]): CheckoutItem[] {
   if (!Array.isArray(rawItems) || rawItems.length === 0 || rawItems.length > 25) {
-    const error = new Error("Add between 1 and 25 books to checkout.");
+    const error = new AppError("Add between 1 and 25 books to checkout.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -57,25 +57,26 @@ export function normalizeCheckoutItems(rawItems, books) {
   const available = new Map(
     books.filter((book) => book.active).map((book) => [book.id, book])
   );
-  const quantities = new Map();
-  for (const rawItem of rawItems) {
-    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) {
-      const error = new Error("A checkout item is invalid.");
+  const quantities = new Map<string, { bookId: string; includePdf: boolean; quantity: number }>();
+  const requestedItems: unknown[] = rawItems;
+  for (const rawItem of requestedItems) {
+    if (!isRecord(rawItem)) {
+      const error = new AppError("A checkout item is invalid.");
       error.status = 400;
       error.expose = true;
       throw error;
     }
     const allowedKeys = ["bookId", "id", "quantity", "includePdf", "format", "formats"];
     if (Object.keys(rawItem).some((key) => !allowedKeys.includes(key))) {
-      const error = new Error("Checkout items contain unsupported fields.");
+      const error = new AppError("Checkout items contain unsupported fields.");
       error.status = 400;
       error.expose = true;
       throw error;
     }
-    const bookId = String(rawItem.bookId || rawItem.id || "").trim();
+    const bookId = scalarText(rawItem.bookId || rawItem.id || "").trim();
     const requestedQuantity = Number(rawItem.quantity ?? 1);
     if (!Number.isInteger(requestedQuantity) || requestedQuantity < 1 || requestedQuantity > 20) {
-      const error = new Error("Book quantity must be between 1 and 20.");
+      const error = new AppError("Book quantity must be between 1 and 20.");
       error.status = 400;
       error.expose = true;
       throw error;
@@ -87,7 +88,7 @@ export function normalizeCheckoutItems(rawItems, books) {
       (Array.isArray(rawItem.formats) && rawItem.formats.includes("pdf"));
     const book = available.get(bookId);
     if (!book) {
-      const error = new Error("One of the selected books is unavailable.");
+      const error = new AppError("One of the selected books is unavailable.");
       error.status = 400;
       error.expose = true;
       throw error;
@@ -103,8 +104,9 @@ export function normalizeCheckoutItems(rawItems, books) {
     }
   }
 
-  const items = [...quantities.values()].map((entry) => {
+  const items: CheckoutItem[] = [...quantities.values()].map((entry) => {
     const book = available.get(entry.bookId);
+    if (!book) throw new AppError("A selected book is unavailable.", 400);
     const pdfAddonCents = entry.includePdf ? PDF_ADDON_CENTS : 0;
     return {
       bookId: entry.bookId,
@@ -124,9 +126,10 @@ export function normalizeCheckoutItems(rawItems, books) {
         : book.stripeEpubPriceId || null,
     };
   });
-  const currency = items[0].currency;
+  const currency = items[0]?.currency;
+  if (!currency) throw new AppError("Add at least one book to checkout.", 400);
   if (!items.every((item) => item.currency === currency)) {
-    const error = new Error("All items in one checkout must use the same currency.");
+    const error = new AppError("All items in one checkout must use the same currency.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -134,7 +137,7 @@ export function normalizeCheckoutItems(rawItems, books) {
   return items;
 }
 
-async function checkoutLine(stripe, item, origin) {
+async function checkoutLine(stripe: StripeGateway, item: CheckoutItem, origin: string): Promise<Stripe.Checkout.SessionCreateParams.LineItem> {
   if (item.stripePriceId) {
     const price = await stripe.prices.retrieve(item.stripePriceId);
     if (
@@ -143,7 +146,7 @@ async function checkoutLine(stripe, item, origin) {
       price.currency !== item.currency ||
       Number(price.unit_amount) !== item.unitAmountCents
     ) {
-      const error = new Error(`The configured Stripe price for ${item.title} is invalid.`);
+      const error = new AppError(`The configured Stripe price for ${item.title} is invalid.`);
       error.status = 503;
       throw error;
     }
@@ -165,16 +168,16 @@ async function checkoutLine(stripe, item, origin) {
   };
 }
 
-export async function createCheckout(request, env, rawItems, account) {
+export async function createCheckout(request: Request, env: WorkerEnv, rawItems: unknown, account: CheckoutAccount) {
   const stripe = stripeClient(env);
   if (!stripe) {
-    const error = new Error("Stripe checkout is not configured yet.");
+    const error = new AppError("Stripe checkout is not configured yet.");
     error.status = 503;
     error.expose = true;
     throw error;
   }
   if (!account?.userId || !account?.email) {
-    const error = new Error("Please log in before checkout.");
+    const error = new AppError("Please log in before checkout.");
     error.status = 401;
     error.expose = true;
     throw error;
@@ -182,13 +185,14 @@ export async function createCheckout(request, env, rawItems, account) {
 
   const books = await listBooks(env, false);
   const items = normalizeCheckoutItems(rawItems, books);
-  const currency = items[0].currency;
+  const currency = items[0]?.currency;
+  if (!currency) throw new AppError("Add at least one book to checkout.", 400);
   const subtotalCents = items.reduce(
     (sum, item) => sum + item.unitAmountCents * item.quantity,
     0
   );
   const createdAt = new Date().toISOString();
-  const order = {
+  const order: Order = {
     id: `ord_${crypto.randomUUID()}`,
     userId: account.userId,
     status: "pending",
@@ -227,7 +231,7 @@ export async function createCheckout(request, env, rawItems, account) {
       userId: account.userId,
       bookIds: items.map((item) => item.bookId).join(",").slice(0, 500),
     };
-    const params = {
+    const params: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
       line_items: lineItems,
       client_reference_id: order.id,
@@ -249,7 +253,7 @@ export async function createCheckout(request, env, rawItems, account) {
       params.customer_email = account.email;
       params.customer_creation = "always";
     }
-    if (String(env.STRIPE_AUTOMATIC_TAX).toLowerCase() === "true") {
+    if (scalarText(env.STRIPE_AUTOMATIC_TAX).toLowerCase() === "true") {
       params.automatic_tax = { enabled: true };
     }
     const session = await stripe.checkout.sessions.create(params, {
@@ -263,46 +267,47 @@ export async function createCheckout(request, env, rawItems, account) {
     order.stripeSessionId = session.id;
     order.updatedAt = new Date().toISOString();
     await saveOrder(env, order);
+    if (!session.url) throw new AppError("Stripe did not return a checkout URL.");
     return { url: session.url, orderId: order.id };
   } catch (error) {
     order.status = "failed";
     order.paymentStatus = "failed";
-    order.lastPaymentError = String(error?.message || "Unable to start checkout.").slice(0, 300);
+    order.lastPaymentError = errorMessage(error, "Unable to start checkout.").slice(0, 300);
     order.updatedAt = new Date().toISOString();
     await saveOrder(env, order);
     throw error;
   }
 }
 
-function checkoutAddress(session) {
+function checkoutAddress(session: StripeSession) {
   return session.customer_details?.address || null;
 }
 
-function linePrice(line) {
+function linePrice(line: StripeLine) {
   return line?.price && typeof line.price === "object" ? line.price : null;
 }
 
-function lineProduct(line) {
+function lineProduct(line: StripeLine) {
   const price = linePrice(line);
   return price?.product && typeof price.product === "object" ? price.product : null;
 }
 
-async function validatePaidSession(env, session, order) {
+async function validatePaidSession(env: WorkerEnv, session: StripeSession, order: Order) {
   if (session.payment_status !== "paid") {
-    const error = new Error("Stripe has not confirmed this payment.");
+    const error = new AppError("Stripe has not confirmed this payment.");
     error.status = 409;
     throw error;
   }
   const metadataOrderId = session.metadata?.orderId || session.client_reference_id;
   if (!metadataOrderId || metadataOrderId !== order.id) {
-    throw new Error("Stripe Checkout order metadata did not match.");
+    throw new AppError("Stripe Checkout order metadata did not match.");
   }
   if (order.userId && session.metadata?.userId !== order.userId) {
-    throw new Error("Stripe Checkout account metadata did not match.");
+    throw new AppError("Stripe Checkout account metadata did not match.");
   }
   const expectedBookIds = order.items.map((item) => item.bookId).join(",");
   if (session.metadata?.bookIds && session.metadata.bookIds !== expectedBookIds) {
-    throw new Error("Stripe Checkout book metadata did not match.");
+    throw new AppError("Stripe Checkout book metadata did not match.");
   }
 
   const expectedSubtotal = order.items.reduce(
@@ -310,18 +315,18 @@ async function validatePaidSession(env, session, order) {
     0
   );
   if (Number(session.amount_subtotal) !== expectedSubtotal) {
-    throw new Error("Stripe Checkout subtotal did not match the trusted catalog.");
+    throw new AppError("Stripe Checkout subtotal did not match the trusted catalog.");
   }
   const lines = session.line_items?.data || [];
   if (lines.length !== order.items.length) {
-    throw new Error("Stripe Checkout line items did not match the order.");
+    throw new AppError("Stripe Checkout line items did not match the order.");
   }
 
   const matched = [];
   const remaining = [...lines];
   for (const item of order.items) {
     const book = await findBook(env, item.bookId);
-    if (!book) throw new Error("A purchased book no longer exists in the catalog.");
+    if (!book) throw new AppError("A purchased book no longer exists in the catalog.");
     const configuredPriceId = item.stripePriceId ||
       (item.format === "epub_pdf" ? book.stripeEpubPdfPriceId : book.stripeEpubPriceId);
     const index = remaining.findIndex((line) => {
@@ -333,33 +338,36 @@ async function validatePaidSession(env, session, order) {
       const priceMatches = configuredPriceId && price?.id === configuredPriceId;
       return Boolean(priceMatches || metadataMatches);
     });
-    if (index < 0) throw new Error("A Stripe line item did not match the trusted book catalog.");
+    if (index < 0) throw new AppError("A Stripe line item did not match the trusted book catalog.");
     const [line] = remaining.splice(index, 1);
+    if (!line) throw new AppError("A Stripe line item was missing.");
     const price = linePrice(line);
     if (
-      Number(price?.unit_amount) !== Number(item.unitAmountCents) ||
+      !price ||
+      Number(price.unit_amount) !== Number(item.unitAmountCents) ||
       price?.currency !== item.currency ||
       Number(line.quantity) !== Number(item.quantity)
     ) {
-      throw new Error("Stripe line-item pricing did not match the trusted order.");
+      throw new AppError("Stripe line-item pricing did not match the trusted order.");
     }
     matched.push({ item, line, price });
   }
   return matched;
 }
 
-async function paidSession(stripe, sessionId) {
+async function paidSession(stripe: StripeGateway, sessionId: string) {
   return stripe.checkout.sessions.retrieve(sessionId, {
     expand: ["line_items.data.price.product", "payment_intent.latest_charge"],
   });
 }
 
-async function fulfillPaidSession(request, env, event, sessionId) {
+async function fulfillPaidSession(request: Request, env: WorkerEnv, event: { id: string }, sessionId: string) {
   const stripe = stripeClient(env);
+  if (!stripe) throw new AppError("Stripe checkout is not configured.", 503);
   const session = await paidSession(stripe, sessionId);
   const orderId = session.metadata?.orderId || session.client_reference_id;
   const order = orderId ? await findOrderById(env, orderId) : null;
-  if (!order) throw new Error("Paid Stripe Checkout Session has no matching order.");
+  if (!order) throw new AppError("Paid Stripe Checkout Session has no matching order.");
   if (session.payment_status !== "paid") {
     order.paymentStatus = session.payment_status || order.paymentStatus;
     order.updatedAt = new Date().toISOString();
@@ -371,7 +379,7 @@ async function fulfillPaidSession(request, env, event, sessionId) {
     "SELECT * FROM purchases WHERE stripe_checkout_session_id = ?"
   )
     .bind(session.id)
-    .first();
+    .first<PurchaseRow>();
   if (existing) return existing;
   const matched = await validatePaidSession(env, session, order);
   const paymentIntent =
@@ -520,7 +528,7 @@ async function fulfillPaidSession(request, env, event, sessionId) {
   if (purchase.userId) {
     const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?")
       .bind(purchase.userId)
-      .first();
+      .first<UserRow>();
     if (user) {
       await sendPurchaseConfirmation(
         request,
@@ -531,7 +539,7 @@ async function fulfillPaidSession(request, env, event, sessionId) {
         [...new Set(matched.flatMap(({ item }) => parseFormats(item.formats)))]
       );
     }
-  } else if (claimToken && claimTokenId) {
+  } else if (claimToken && claimTokenId && pendingEmail) {
     await sendClaimEmail(
       request,
       env,
@@ -544,21 +552,21 @@ async function fulfillPaidSession(request, env, event, sessionId) {
   return purchase;
 }
 
-async function updateFailedOrder(env, object) {
+async function updateFailedOrder(env: WorkerEnv, object: PaymentEventObject) {
   const orderId = object.metadata?.orderId || object.client_reference_id;
   const order = orderId ? await findOrderById(env, orderId) : null;
   if (!order) return;
   order.status = "failed";
   order.paymentStatus = "failed";
   order.fulfillmentStatus = "unpaid";
-  order.lastPaymentError = String(
+  order.lastPaymentError = scalarText(
     object.last_payment_error?.message || "Payment failed."
   ).slice(0, 300);
   order.updatedAt = new Date().toISOString();
   await saveOrder(env, order);
 }
 
-async function updateRefundOrDispute(env, event) {
+async function updateRefundOrDispute(env: WorkerEnv, event: PaymentEvent) {
   const object = event.data.object;
   const paymentIntentId = stripeObjectId(object.payment_intent);
   if (!paymentIntentId) return;
@@ -566,7 +574,7 @@ async function updateRefundOrDispute(env, event) {
     "SELECT * FROM purchases WHERE stripe_payment_intent_id = ? ORDER BY created_at DESC LIMIT 1"
   )
     .bind(paymentIntentId)
-    .first();
+    .first<PurchaseRow>();
   if (!purchase) return;
   const now = new Date().toISOString();
 
@@ -626,12 +634,15 @@ async function updateRefundOrDispute(env, event) {
   }
 }
 
-export async function processStripeEvent(request, env, event) {
+export async function processStripeEvent(request: Request, env: WorkerEnv, rawEvent: unknown) {
+  const event = eventSchema.parse(rawEvent);
   if (
     event.type === "checkout.session.completed" ||
     event.type === "checkout.session.async_payment_succeeded"
   ) {
-    return fulfillPaidSession(request, env, event, event.data.object.id);
+    const sessionId = event.data.object.id;
+    if (!sessionId) throw new AppError("Stripe event is missing a Checkout Session ID.");
+    return fulfillPaidSession(request, env, event, sessionId);
   }
   if (event.type === "checkout.session.expired") {
     const session = event.data.object;
@@ -663,16 +674,16 @@ export async function processStripeEvent(request, env, event) {
   return null;
 }
 
-export async function handleWebhook(request, env) {
+export async function handleWebhook(request: Request, env: WorkerEnv) {
   const stripe = stripeClient(env);
   if (!stripe || !env.STRIPE_WEBHOOK_SECRET) {
-    const error = new Error("Stripe webhook verification is not configured.");
+    const error = new AppError("Stripe webhook verification is not configured.");
     error.status = 503;
     throw error;
   }
   const signature = request.headers.get("stripe-signature");
   if (!signature) {
-    const error = new Error("Missing Stripe signature.");
+    const error = new AppError("Missing Stripe signature.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -688,7 +699,7 @@ export async function handleWebhook(request, env) {
       Stripe.createSubtleCryptoProvider()
     );
   } catch {
-    const error = new Error("Invalid Stripe webhook signature.");
+    const error = new AppError("Invalid Stripe webhook signature.");
     error.status = 400;
     error.expose = true;
     throw error;
@@ -704,7 +715,7 @@ export async function handleWebhook(request, env) {
   }
 }
 
-export async function checkoutStatus(env, sessionId, userId) {
+export async function checkoutStatus(env: WorkerEnv, sessionId: string, userId: string) {
   const order = await findOrderBySession(env, sessionId);
   if (!order || order.userId !== userId) return null;
   const purchase = await env.DB.prepare(
@@ -712,7 +723,7 @@ export async function checkoutStatus(env, sessionId, userId) {
      FROM purchases WHERE stripe_checkout_session_id = ? AND user_id = ?`
   )
     .bind(sessionId, userId)
-    .first();
+    .first<Pick<PurchaseRow, "id" | "entitlement_status" | "payment_status" | "purchased_at">>();
   if (!purchase || purchase.entitlement_status !== "active") {
     return { status: "processing", orderId: order.id, books: [] };
   }
@@ -722,7 +733,7 @@ export async function checkoutStatus(env, sessionId, userId) {
      WHERE pi.purchase_id = ? ORDER BY b.title`
   )
     .bind(purchase.id)
-    .all();
+    .all<{ id: string; number: string; title: string; image_url: string; formats_json: string }>();
   return {
     status: "ready",
     orderId: order.id,

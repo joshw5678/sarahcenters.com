@@ -1,19 +1,25 @@
+import { scalarText } from "../shared/contracts.js";
+import * as z from "zod";
+import { AppError, errorMessage, accountResponseSchema, messageResponseSchema, libraryResponseSchema, downloadResponseSchema } from "../shared/contracts.js";
+import type { AccountResponse, LibraryBook } from "../shared/contracts.js";
+import { element, optionalElement, input, formValues as readFormValues, requestJson, jsonOptions } from "./browser.js";
 (() => {
   "use strict";
 
   const page = document.body.dataset.accountPage;
-  const form = document.querySelector("[data-account-form]");
-  const status = document.querySelector("[data-form-status]");
-  const submit = form?.querySelector('button[type="submit"]');
+  const form = optionalElement("[data-account-form]", HTMLFormElement);
+  const status = optionalElement("[data-form-status]", HTMLElement);
+  const submit = form ? optionalElement('button[type="submit"]', HTMLButtonElement, form) : null;
+  function accountForm(): HTMLFormElement { if (!form) throw new Error("This page is missing its account accountForm()."); return form; }
 
-  function show(message, kind = "info") {
+  function show(message: string | undefined, kind = "info") {
     if (!status) return;
     status.textContent = message || "";
     status.dataset.kind = kind;
     status.hidden = !message;
   }
 
-  function setBusy(busy, label = "Working...") {
+  function setBusy(busy: boolean, label = "Working...") {
     if (!submit) return;
     if (busy) {
       submit.dataset.originalLabel = submit.textContent;
@@ -22,39 +28,19 @@
       submit.textContent = submit.dataset.originalLabel || submit.textContent;
     }
     submit.disabled = busy;
-    form?.setAttribute("aria-busy", String(busy));
+    form?.setAttribute("aria-busy", scalarText(busy));
   }
 
-  async function api(path, options = {}) {
-    const response = await fetch(path, {
-      credentials: "same-origin",
-      headers: { Accept: "application/json", ...(options.headers || {}) },
-      ...options,
-    });
-    let data = {};
-    try {
-      data = await response.json();
-    } catch {
-      data = {};
-    }
-    if (!response.ok) {
-      const error = new Error(data.error || "The request could not be completed.");
-      error.status = response.status;
-      error.code = data.code;
-      throw error;
-    }
-    return data;
-  }
-
-  function jsonOptions(method, body, csrfToken = "") {
-    return {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
-      },
-      body: JSON.stringify(body),
-    };
+  const accountMutationSchema = accountResponseSchema.extend({ message: z.string().optional() });
+  function api(path: "/api/account/me" | "/api/account/login" | "/api/account", options?: RequestInit): Promise<z.infer<typeof accountMutationSchema>>;
+  function api(path: "/api/library", options?: RequestInit): Promise<z.infer<typeof libraryResponseSchema>>;
+  function api(path: `/api/library/${string}/download`, options?: RequestInit): Promise<z.infer<typeof downloadResponseSchema>>;
+  function api(path: string, options?: RequestInit): Promise<z.infer<typeof messageResponseSchema>>;
+  async function api(path: string, options: RequestInit = {}) {
+    if (["/api/account/me", "/api/account/login", "/api/account"].includes(path)) return requestJson(path, accountMutationSchema, options);
+    if (path === "/api/library") return requestJson(path, libraryResponseSchema, options);
+    if (path.startsWith("/api/library/")) return requestJson(path, downloadResponseSchema, options);
+    return requestJson(path, messageResponseSchema, options);
   }
 
   function returnPath(fallback = "/library.html") {
@@ -71,18 +57,16 @@
     return token;
   }
 
-  function formValues() {
-    return Object.fromEntries(new FormData(form).entries());
-  }
+  function formValues() { return readFormValues(accountForm()); }
 
   async function currentAccount() {
     return api("/api/account/me");
   }
 
   async function setupLogin() {
-    form.addEventListener("submit", async (event) => {
+    accountForm().addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!form.reportValidity()) return;
+      if (!accountForm().reportValidity()) return;
       setBusy(true, "Logging In...");
       show("");
       try {
@@ -99,16 +83,16 @@
             : `/verify-email.html?return=${encodeURIComponent(target)}`
         );
       } catch (error) {
-        show(error.message, "error");
+        show(errorMessage(error), "error");
         setBusy(false);
       }
     });
   }
 
   async function setupRegister() {
-    form.addEventListener("submit", async (event) => {
+    accountForm().addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!form.reportValidity()) return;
+      if (!accountForm().reportValidity()) return;
       const values = formValues();
       if (values.password !== values.confirmPassword) {
         show("Passwords do not match.", "error");
@@ -136,16 +120,16 @@
           setBusy(false);
         }
       } catch (error) {
-        show(error.message, "error");
+        show(errorMessage(error), "error");
         setBusy(false);
       }
     });
   }
 
   async function setupForgot() {
-    form.addEventListener("submit", async (event) => {
+    accountForm().addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!form.reportValidity()) return;
+      if (!accountForm().reportValidity()) return;
       setBusy(true, "Sending Link...");
       show("");
       try {
@@ -155,9 +139,9 @@
           jsonOptions("POST", { email: values.email })
         );
         show(data.message, "success");
-        form.reset();
+        accountForm().reset();
       } catch (error) {
-        show(error.message, "error");
+        show(errorMessage(error), "error");
       } finally {
         setBusy(false);
       }
@@ -171,9 +155,9 @@
       if (submit) submit.disabled = true;
       return;
     }
-    form.addEventListener("submit", async (event) => {
+    accountForm().addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!form.reportValidity()) return;
+      if (!accountForm().reportValidity()) return;
       const values = formValues();
       if (values.password !== values.confirmPassword) {
         show("Passwords do not match.", "error");
@@ -187,10 +171,10 @@
           jsonOptions("POST", { token, password: values.password })
         );
         show(data.message, "success");
-        form.hidden = true;
-        document.querySelector("[data-after-reset]")?.removeAttribute("hidden");
+        accountForm().hidden = true;
+        optionalElement("[data-after-reset]", HTMLElement)?.removeAttribute("hidden");
       } catch (error) {
-        show(error.message, "error");
+        show(errorMessage(error), "error");
         setBusy(false);
       }
     });
@@ -198,10 +182,10 @@
 
   async function setupVerify() {
     const token = fragmentToken();
-    const resend = document.querySelector("[data-resend-verification]");
-    const continueLink = document.querySelector("[data-verified-continue]");
+    const resend = optionalElement("[data-resend-verification]", HTMLButtonElement);
+    const continueLink = optionalElement("[data-verified-continue]", HTMLAnchorElement);
     if (continueLink) continueLink.href = returnPath();
-    let account = null;
+    let account: AccountResponse | null = null;
     try {
       account = await currentAccount();
     } catch {
@@ -216,16 +200,16 @@
           jsonOptions("POST", { token })
         );
         show(data.message, "success");
-        document.querySelector("[data-verified-actions]")?.removeAttribute("hidden");
-        if (form) form.hidden = true;
+        optionalElement("[data-verified-actions]", HTMLElement)?.removeAttribute("hidden");
+        if (form) accountForm().hidden = true;
       } catch (error) {
-        show(error.message, "error");
+        show(errorMessage(error), "error");
       } finally {
         setBusy(false);
       }
     } else if (account?.user.emailVerified) {
       show("Your email is already verified.", "success");
-      document.querySelector("[data-verified-actions]")?.removeAttribute("hidden");
+      optionalElement("[data-verified-actions]", HTMLElement)?.removeAttribute("hidden");
     } else {
       show(
         new URLSearchParams(location.search).get("delivery") === "failed"
@@ -252,7 +236,7 @@
         );
         show(data.message, data.emailSent === false ? "error" : "success");
       } catch (error) {
-        show(error.message, "error");
+        show(errorMessage(error), "error");
       } finally {
         resend.disabled = false;
       }
@@ -260,7 +244,7 @@
   }
 
   async function setupAccount() {
-    let account;
+    let account: AccountResponse;
     try {
       account = await currentAccount();
     } catch {
@@ -269,16 +253,16 @@
       );
       return;
     }
-    form.elements.displayName.value = account.user.displayName || "";
-    form.elements.email.value = account.user.email;
-    const verified = document.querySelector("[data-verification-state]");
+    input(accountForm(), "displayName").value = account.user.displayName || "";
+    input(accountForm(), "email").value = account.user.email;
+    const verified = optionalElement("[data-verification-state]", HTMLElement);
     if (verified) {
       verified.textContent = account.user.emailVerified ? "Verified" : "Verification required";
-      verified.dataset.verified = String(account.user.emailVerified);
+      verified.dataset.verified = scalarText(account.user.emailVerified);
     }
-    form.addEventListener("submit", async (event) => {
+    accountForm().addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!form.reportValidity()) return;
+      if (!accountForm().reportValidity()) return;
       const values = formValues();
       if (values.newPassword && values.newPassword !== values.confirmPassword) {
         show("New passwords do not match.", "error");
@@ -286,7 +270,7 @@
       }
       setBusy(true, "Saving...");
       try {
-        const payload = {
+        const payload: Record<string, string | undefined> = {
           displayName: values.displayName,
           email: values.email,
         };
@@ -297,22 +281,24 @@
           jsonOptions("PATCH", payload, account.csrfToken)
         );
         account = { ...account, user: data.user, csrfToken: data.csrfToken };
-        form.elements.currentPassword.value = "";
-        form.elements.newPassword.value = "";
-        form.elements.confirmPassword.value = "";
+        input(accountForm(), "currentPassword").value = "";
+        input(accountForm(), "newPassword").value = "";
+        input(accountForm(), "confirmPassword").value = "";
         show(data.message, "success");
         if (verified) {
           verified.textContent = data.user.emailVerified ? "Verified" : "Verification required";
-          verified.dataset.verified = String(data.user.emailVerified);
+          verified.dataset.verified = scalarText(data.user.emailVerified);
         }
       } catch (error) {
-        show(error.message, "error");
+        show(errorMessage(error), "error");
       } finally {
         setBusy(false);
       }
     });
-    document.querySelector("[data-revoke-sessions]")?.addEventListener("click", async (event) => {
-      event.currentTarget.disabled = true;
+    optionalElement("[data-revoke-sessions]", HTMLButtonElement)?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      if (!(button instanceof HTMLButtonElement)) return;
+      button.disabled = true;
       try {
         const data = await api(
           "/api/account/sessions/revoke-others",
@@ -320,32 +306,33 @@
         );
         show(data.message, "success");
       } catch (error) {
-        show(error.message, "error");
+        show(errorMessage(error), "error");
       } finally {
-        event.currentTarget.disabled = false;
+        button.disabled = false;
       }
     });
     setupLogout(account);
   }
 
-  function setupLogout(account) {
+  function setupLogout(account: AccountResponse) {
     document.querySelectorAll("[data-logout]").forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) return;
       button.addEventListener("click", async () => {
         button.disabled = true;
         try {
           await api("/api/account/logout", jsonOptions("POST", {}, account.csrfToken));
           window.location.assign("/");
         } catch (error) {
-          show(error.message, "error");
+          show(errorMessage(error), "error");
           button.disabled = false;
         }
       });
     });
   }
 
-  function renderLibrary(books, account) {
-    const grid = document.querySelector("[data-library-grid]");
-    const empty = document.querySelector("[data-library-empty]");
+  function renderLibrary(books: LibraryBook[], account: AccountResponse) {
+    const grid = element("[data-library-grid]", HTMLElement);
+    const empty = element("[data-library-empty]", HTMLElement);
     grid.replaceChildren();
     empty.hidden = books.length > 0;
     books.forEach((book) => {
@@ -384,7 +371,7 @@
             );
             window.location.assign(data.url);
           } catch (error) {
-            show(error.message, "error");
+            show(errorMessage(error), "error");
             button.disabled = false;
             button.textContent = original;
           }
@@ -398,7 +385,7 @@
   }
 
   async function setupLibrary() {
-    let account;
+    let account: AccountResponse;
     try {
       account = await currentAccount();
       if (!account.user.emailVerified) {
@@ -411,24 +398,24 @@
       renderLibrary(data.books || [], account);
       setupLogout(account);
     } catch (error) {
-      if (error.status === 401) {
+      if (error instanceof AppError && error.status === 401) {
         window.location.replace(`/login.html?return=${encodeURIComponent(location.pathname)}`);
       } else {
-        show(error.message, "error");
+        show(errorMessage(error), "error");
       }
     } finally {
-      document.querySelector("[data-library-loading]")?.setAttribute("hidden", "");
+      optionalElement("[data-library-loading]", HTMLElement)?.setAttribute("hidden", "");
     }
   }
 
   async function setupClaim() {
     const token = fragmentToken();
-    const actions = document.querySelector("[data-claim-auth-actions]");
+    const actions = optionalElement("[data-claim-auth-actions]", HTMLElement);
     if (!token) {
       show("This purchase-claim link is missing or invalid.", "error");
       return;
     }
-    let account;
+    let account: AccountResponse;
     try {
       account = await currentAccount();
     } catch {
@@ -443,7 +430,7 @@
     if (!account.user.emailVerified) {
       const destination = `/claim-purchase.html#token=${encodeURIComponent(token)}`;
       show("Verify your account email before claiming this purchase.", "info");
-      const verify = document.querySelector("[data-claim-verify]");
+      const verify = optionalElement("[data-claim-verify]", HTMLAnchorElement);
       if (verify) {
         verify.href = `/verify-email.html?return=${encodeURIComponent(destination)}`;
         verify.hidden = false;
@@ -457,13 +444,13 @@
         jsonOptions("POST", { token }, account.csrfToken)
       );
       show(data.message, "success");
-      document.querySelector("[data-claim-complete]")?.removeAttribute("hidden");
+      optionalElement("[data-claim-complete]", HTMLElement)?.removeAttribute("hidden");
     } catch (error) {
-      show(error.message, "error");
+      show(errorMessage(error), "error");
     }
   }
 
-  const setup = {
+  const setups: Record<string, () => Promise<void>> = {
     login: setupLogin,
     register: setupRegister,
     forgot: setupForgot,
@@ -472,6 +459,7 @@
     account: setupAccount,
     library: setupLibrary,
     claim: setupClaim,
-  }[page];
-  if (setup) setup();
+  };
+  const setup = setups[page || ""];
+  if (setup) void setup().catch((error: unknown) => show(errorMessage(error), "error"));
 })();

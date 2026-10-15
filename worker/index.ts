@@ -1,3 +1,7 @@
+import { scalarText } from "../shared/contracts.js";
+import type { Book } from "../shared/contracts.js";
+import { AppError, errorMessage, isRecord, requireRecord, parseJson as parseUnknownJson } from "../shared/contracts.js";
+import type { WorkerEnv } from "./types.js";
 import {
   findBook,
   findOrderById,
@@ -35,7 +39,7 @@ import {
 const MAX_JSON_BYTES = 1024 * 1024;
 const MAX_COVER_BYTES = 6 * 1024 * 1024;
 
-function json(data, status = 200, headers = {}) {
+function json(data: unknown, status = 200, headers: HeadersInit = {}) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
@@ -46,7 +50,7 @@ function json(data, status = 200, headers = {}) {
   });
 }
 
-function publicBook(book) {
+function publicBook(book: Book) {
   return {
     id: book.id,
     slug: book.slug,
@@ -61,94 +65,78 @@ function publicBook(book) {
   };
 }
 
-function publicOrder(order) {
-  return {
-    id: order.id,
-    status: order.status,
-    fulfillmentStatus: order.fulfillmentStatus,
-    paymentStatus: order.paymentStatus,
-    receiptUrl: order.receiptUrl,
-    items: order.items,
-    subtotalCents: order.subtotalCents,
-    shippingCents: order.shippingCents,
-    totalCents: order.totalCents,
-    currency: order.currency,
-    customer: order.customer,
-    createdAt: order.createdAt,
-    paidAt: order.paidAt,
-  };
-}
 
-async function readJson(request) {
+
+async function readJson(request: Request): Promise<unknown> {
   const declaredLength = Number(request.headers.get("content-length") || 0);
   if (declaredLength > MAX_JSON_BYTES) {
-    const error = new Error("Request body is too large.");
+    const error = new AppError("Request body is too large.");
     error.status = 413;
     throw error;
   }
   const body = await request.text();
   if (new TextEncoder().encode(body).byteLength > MAX_JSON_BYTES) {
-    const error = new Error("Request body is too large.");
+    const error = new AppError("Request body is too large.");
     error.status = 413;
     throw error;
   }
   try {
-    return body ? JSON.parse(body) : {};
+    return body ? parseUnknownJson(body) : {};
   } catch {
-    const error = new Error("Request body must be valid JSON.");
+    const error = new AppError("Request body must be valid JSON.");
     error.status = 400;
     throw error;
   }
 }
 
-function requiredString(value, label, maxLength = 400) {
-  const text = String(value || "").trim();
-  if (!text) throw new Error(`${label} is required.`);
-  if (text.length > maxLength) throw new Error(`${label} is too long.`);
+function requiredString(value: unknown, label: string, maxLength = 400) {
+  const text = scalarText(value || "").trim();
+  if (!text) throw new AppError(`${label} is required.`);
+  if (text.length > maxLength) throw new AppError(`${label} is too long.`);
   return text;
 }
 
-function optionalString(value, maxLength = 1000) {
-  return String(value || "").trim().slice(0, maxLength);
+function optionalString(value: unknown, maxLength = 1000) {
+  return scalarText(value || "").trim().slice(0, maxLength);
 }
 
-function parsePriceCents(value) {
-  const number = Number(String(value || "").replace(/[^0-9.]/g, ""));
+function parsePriceCents(value: unknown) {
+  const number = Number(scalarText(value || "").replace(/[^0-9.]/g, ""));
   if (!Number.isFinite(number) || number <= 0) {
-    throw new Error("A valid price is required.");
+    throw new AppError("A valid price is required.");
   }
   const cents = Math.round(number * 100);
   if (cents < 50) {
-    throw new Error("Stripe requires a minimum charge of at least $0.50 USD.");
+    throw new AppError("Stripe requires a minimum charge of at least $0.50 USD.");
   }
   return cents;
 }
 
-function normalizeCurrency(value) {
-  const currency = String(value || "usd").trim().toLowerCase();
+function normalizeCurrency(value: unknown) {
+  const currency = scalarText(value || "usd").trim().toLowerCase();
   if (!/^[a-z]{3}$/.test(currency)) {
-    throw new Error("Currency must be a 3-letter code.");
+    throw new AppError("Currency must be a 3-letter code.");
   }
   return currency;
 }
 
-function slugify(value) {
-  return String(value || "")
+function slugify(value: unknown) {
+  return scalarText(value || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
 }
 
-function coverKey(file) {
-  const mimeExtensions = {
+function coverKey(file: File) {
+  const mimeExtensions: Record<string, string> = {
     "image/jpeg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
   };
   const extension = mimeExtensions[file.type];
-  if (!extension) throw new Error("Book cover must be a PNG, JPG, or WebP image.");
-  const name = String(file.name || "cover")
+  if (!extension) throw new AppError("Book cover must be a PNG, JPG, or WebP image.");
+  const name = scalarText(file.name || "cover")
     .replace(/\.[^.]+$/, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -157,7 +145,7 @@ function coverKey(file) {
   return `${Date.now()}-${crypto.randomUUID()}-${name || "cover"}.${extension}`;
 }
 
-async function adminGuard(request, env, mutating = false) {
+async function adminGuard(request: Request, env: WorkerEnv, mutating = false) {
   if (!env.ADMIN_PASSWORD || !env.ADMIN_SESSION_SECRET) {
     return json({ error: "Owner admin is not configured." }, 503);
   }
@@ -170,7 +158,7 @@ async function adminGuard(request, env, mutating = false) {
   return null;
 }
 
-async function serveCover(pathname, env) {
+async function serveCover(pathname: string, env: WorkerEnv) {
   let key;
   try {
     key = decodeURIComponent(pathname.slice("/uploads/books/".length));
@@ -188,7 +176,7 @@ async function serveCover(pathname, env) {
   return new Response(object.body, { headers });
 }
 
-async function handleAdmin(request, env, url) {
+async function handleAdmin(request: Request, env: WorkerEnv, url: URL) {
   const { pathname } = url;
   const method = request.method;
 
@@ -204,11 +192,11 @@ async function handleAdmin(request, env, url) {
       return json(
         { error: "Too many login attempts. Try again shortly." },
         429,
-        { "Retry-After": String(limit.retryAfter) }
+        { "Retry-After": scalarText(limit.retryAfter) }
       );
     }
 
-    const body = await readJson(request);
+    const body = requireRecord(await readJson(request));
     if (!(await passwordsMatch(body.password, env.ADMIN_PASSWORD))) {
       await recordLoginFailure(request, env);
       return json({ error: "Incorrect owner password." }, 401);
@@ -253,12 +241,12 @@ async function handleAdmin(request, env, url) {
   }
 
   if (pathname === "/api/admin/content" && method === "PATCH") {
-    const body = await readJson(request);
+    const body = requireRecord(await readJson(request));
     const updates =
       body && typeof body.content === "object" && body.content && !Array.isArray(body.content)
         ? body.content
         : body;
-    if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
+    if (!isRecord(updates)) {
       return json({ error: "Invalid site text payload." }, 400);
     }
     return json({ content: await saveContentMap(env, updates) });
@@ -272,7 +260,7 @@ async function handleAdmin(request, env, url) {
 
     const form = await request.formData();
     const cover = form.get("cover");
-    if (!cover || typeof cover.arrayBuffer !== "function") {
+    if (!(cover instanceof File)) {
       return json({ error: "A book cover image is required." }, 400);
     }
     if (cover.size > MAX_COVER_BYTES) {
@@ -284,7 +272,7 @@ async function handleAdmin(request, env, url) {
     const createdAt = new Date().toISOString();
     const bookId = `book_${crypto.randomUUID()}`;
     const bookSlug = slugify(title);
-    const book = {
+    const book: Book = {
       id: bookId,
       slug: slugify(title),
       number: optionalString(form.get("number"), 24),
@@ -294,7 +282,7 @@ async function handleAdmin(request, env, url) {
       image: `/uploads/books/${key}`,
       priceCents: parsePriceCents(form.get("price")),
       currency: normalizeCurrency(form.get("currency")),
-      active: String(form.get("active")).toLowerCase() !== "false",
+      active: scalarText(form.get("active")).toLowerCase() !== "false",
       epubKey: `books/${bookId}/${bookSlug}.epub`,
       pdfKey: `books/${bookId}/${bookSlug}.pdf`,
       createdAt,
@@ -317,14 +305,14 @@ async function handleAdmin(request, env, url) {
 
   const bookMatch = pathname.match(/^\/api\/admin\/books\/([^/]+)$/);
   if (bookMatch && ["PATCH", "DELETE"].includes(method)) {
-    const id = decodeURIComponent(bookMatch[1]);
+    const id = decodeURIComponent(bookMatch[1] ?? "");
     const book = await findBook(env, id);
     if (!book) return json({ error: "Book not found." }, 404);
 
     if (method === "DELETE") {
       book.active = false;
     } else {
-      const body = await readJson(request);
+      const body = requireRecord(await readJson(request));
       if (body.title !== undefined) {
         book.title = requiredString(body.title, "Title", 160);
         book.slug = slugify(book.title);
@@ -343,22 +331,22 @@ async function handleAdmin(request, env, url) {
   }
 
   if (pathname === "/api/admin/orders" && method === "GET") {
-    const status = String(url.searchParams.get("status") || "").trim();
+    const status = scalarText(url.searchParams.get("status") || "").trim();
     return json({ orders: await listOrders(env, status) });
   }
 
   const orderMatch = pathname.match(/^\/api\/admin\/orders\/([^/]+)$/);
   if (orderMatch && method === "GET") {
-    const order = await findOrderById(env, decodeURIComponent(orderMatch[1]));
+    const order = await findOrderById(env, decodeURIComponent(orderMatch[1] ?? ""));
     return order
       ? json({ order })
       : json({ error: "Order not found." }, 404);
   }
 
   if (orderMatch && method === "PATCH") {
-    const order = await findOrderById(env, decodeURIComponent(orderMatch[1]));
+    const order = await findOrderById(env, decodeURIComponent(orderMatch[1] ?? ""));
     if (!order) return json({ error: "Order not found." }, 404);
-    const body = await readJson(request);
+    const body = requireRecord(await readJson(request));
     const allowed = new Set([
       "unpaid",
       "new",
@@ -367,7 +355,7 @@ async function handleAdmin(request, env, url) {
       "canceled",
     ]);
     if (body.fulfillmentStatus !== undefined) {
-      const status = String(body.fulfillmentStatus || "").trim();
+      const status = scalarText(body.fulfillmentStatus || "").trim();
       if (!allowed.has(status)) {
         return json({ error: "Unknown fulfillment status." }, 400);
       }
@@ -386,7 +374,7 @@ async function handleAdmin(request, env, url) {
   return json({ error: "Not found." }, 404);
 }
 
-async function route(request, env) {
+async function route(request: Request, env: WorkerEnv) {
   const url = new URL(request.url);
   const { pathname } = url;
 
@@ -423,7 +411,7 @@ async function route(request, env) {
       );
     }
     await requireCsrf(request, session);
-    const body = await readJson(request);
+    const body = requireRecord(await readJson(request));
     if (!body || typeof body !== "object" || Array.isArray(body) ||
         Object.keys(body).some((key) => key !== "items")) {
       return json({ error: "Invalid checkout request." }, 400);
@@ -442,12 +430,12 @@ async function route(request, env) {
     const session = await getCustomerSession(request, env);
     if (!session) return json({ error: "Please log in to view this purchase." }, 401);
     await requireCsrf(request, session);
-    const body = await readJson(request);
+    const body = requireRecord(await readJson(request));
     if (!body || typeof body !== "object" || Array.isArray(body) ||
         Object.keys(body).some((key) => key !== "sessionId")) {
       return json({ error: "Invalid checkout status request." }, 400);
     }
-    const sessionId = String(body.sessionId || "").trim();
+    const sessionId = scalarText(body.sessionId || "").trim();
     if (!/^cs_(?:test_|live_)?[A-Za-z0-9_]{10,255}$/.test(sessionId)) {
       return json({ error: "Invalid Checkout Session." }, 400);
     }
@@ -500,7 +488,7 @@ async function route(request, env) {
   return env.ASSETS.fetch(request);
 }
 
-function addSecurityHeaders(response, request) {
+function addSecurityHeaders(response: Response, request: Request) {
   const headers = new Headers(response.headers);
   if ((headers.get("Content-Type") || "").includes("text/html")) {
     headers.set("Cache-Control", "no-store");
@@ -533,33 +521,34 @@ function addSecurityHeaders(response, request) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request: Request, env: WorkerEnv) {
     try {
       return addSecurityHeaders(await route(request, env), request);
-    } catch (error) {
+    } catch (caught) {
+      const error = caught instanceof AppError ? caught : new AppError(errorMessage(caught));
       const status = Number(error.status || 500);
       if (status >= 500) {
         console.error("Worker request failed", {
           method: request.method,
           path: new URL(request.url).pathname,
-          name: String(error?.name || "Error").slice(0, 80),
+          name: scalarText(error?.name || "Error").slice(0, 80),
           status,
-          message: String(error?.message || "Request failed").slice(0, 300),
+          message: scalarText(error?.message || "Request failed").slice(0, 300),
         });
       }
       const message =
         status < 500 || error.expose
           ? error.message
           : "The server could not complete this request.";
-      const headers = {};
+      const headers: Record<string, string> = {};
       if (status === 429 && error.retryAfter) {
-        headers["Retry-After"] = String(error.retryAfter);
+        headers["Retry-After"] = scalarText(error.retryAfter);
       }
-      if (error.code) headers["X-Error-Code"] = String(error.code);
+      if (error.code) headers["X-Error-Code"] = scalarText(error.code);
       return addSecurityHeaders(
         json({ error: message, ...(error.code ? { code: error.code } : {}) }, status, headers),
         request
       );
     }
   },
-};
+} satisfies ExportedHandler<WorkerEnv>;
